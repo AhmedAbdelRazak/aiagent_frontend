@@ -1,19 +1,26 @@
+// ~/AgentAI/aiagent_frontend/server.js
 const express = require("express");
 const compression = require("compression");
-const path = require("path");
-const app = express();
+const next = require("next");
+const { parse } = require("url");
 
-app.use(compression());
-app.use(express.static(path.join(__dirname, "build")));
+const dev = process.env.NODE_ENV !== "production";
+const app = next({ dev, dir: __dirname });
+const handle = app.getRequestHandler();
+const PORT = 3103;
 
-app.get("*", function (req, res) {
-	res.sendFile(path.join(__dirname, "build", "index.html"));
-});
+app.prepare().then(() => {
+	const server = express();
+	server.use(compression());
 
-app.use(express.static(__dirname + "/public"));
+	// Let Next.js handle everything (pages, assets, API routes)
+	server.all("*", (req, res) => {
+		const parsedUrl = parse(req.url, true);
+		return handle(req, res, parsedUrl);
+	});
 
-const PORT = process.env.PORT || 3103;
-
-app.listen(PORT, () => {
-	console.log(`App is running on port ${PORT}`);
+	server.listen(PORT, (err) => {
+		if (err) throw err;
+		console.log(`> Next.js server running at http://localhost:${PORT}`);
+	});
 });
