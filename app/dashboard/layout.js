@@ -16,7 +16,7 @@ const Content = styled.main`
 
 export default function AdminLayout({ children }) {
 	return (
-		<ProtectedRoute adminOnly={true}>
+		<ProtectedRoute>
 			<Wrapper>
 				<UserSideMenu />
 				<Content>{children}</Content>
