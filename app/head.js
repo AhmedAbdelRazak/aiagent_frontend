@@ -3,9 +3,10 @@
 export default function Head() {
 	return (
 		<>
-			<meta charSet='UTF-8' />
-			{/* Default SEO tags; per-page tags override these */}
-			<meta name='viewport' content='width=device-width, initial-scale=1' />
+			<meta
+				name='google-site-verification'
+				content='47ejHEFZmQ6Am644qP3hd1Y1v5WQk-6sroDUTF0RF5Q'
+			/>
 			<link rel='icon' href='/favicon.ico' />
 		</>
 	);
