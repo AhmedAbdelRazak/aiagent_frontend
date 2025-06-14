@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import styled from "styled-components";
 import {
@@ -41,26 +43,26 @@ const data = [
 	{
 		name: "AiVideomatic",
 		duration: "60s (soon 120s)",
-		quality: "Cinematic (Runway Gen-4 Turbo)",
+		quality: "Cinematic (Runway Gen‑4 Turbo)",
 		automation: "Full pipeline & scheduling",
 		price: "$0.08–$0.10/sec",
 	},
 	{
-		name: "Google Veo",
+		name: "Google Veo",
 		duration: "8s per clip",
-		quality: "Hyper-realistic",
+		quality: "Hyper‑realistic",
 		automation: "Generation only",
 		price: "$0.35/sec",
 	},
 	{
-		name: "Runway Gen-4",
+		name: "Runway Gen‑4",
 		duration: "10s per clip",
-		quality: "High-fidelity",
+		quality: "High‑fidelity",
 		automation: "Video only",
 		price: "$0.05/sec",
 	},
 	{
-		name: "HeyGen Pro",
+		name: "HeyGen Pro",
 		duration: "Unlimited (avatar videos)",
 		quality: "Avatar presenters",
 		automation: "No scheduling",
@@ -85,7 +87,7 @@ export default function Comparison() {
 						<Th>Platform</Th>
 						<Th>
 							<IconCell>
-								<AiOutlineClockCircle /> Max Duration
+								<AiOutlineClockCircle /> Max Duration
 							</IconCell>
 						</Th>
 						<Th>
@@ -102,8 +104,8 @@ export default function Comparison() {
 					</tr>
 				</thead>
 				<tbody>
-					{data.map((row, i) => (
-						<tr key={i}>
+					{data.map((row) => (
+						<tr key={row.name}>
 							<Td>{row.name}</Td>
 							<Td>{row.duration}</Td>
 							<Td>{row.quality}</Td>

@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import styled, { css } from "styled-components";
 import { Card, Button } from "antd";
@@ -16,13 +18,11 @@ const Title = styled.h2`
 	font-size: ${({ theme }) => theme.fontSizes["2xl"]};
 	margin-bottom: 3rem;
 `;
-
 const Cards = styled.div`
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 	gap: 2rem;
 `;
-
 const StyledCard = styled(Card)`
 	border-radius: 10px;
 	${({ $highlight, theme }) =>
@@ -31,13 +31,11 @@ const StyledCard = styled(Card)`
 			border: 2px solid ${theme.colors.primary};
 		`}
 `;
-
 const Price = styled.p`
 	font-size: ${({ theme }) => theme.fontSizes.xl};
 	font-weight: 700;
 	margin-bottom: 1.5rem;
 `;
-
 const Feature = styled.li`
 	display: flex;
 	align-items: center;
@@ -73,6 +71,7 @@ export default function Pricing() {
 								{plan.priceMonthly === 0 ? "$0" : `$${plan.priceMonthly}`}
 								<span style={{ fontSize: ".75rem", fontWeight: 400 }}>/mo</span>
 							</Price>
+
 							<ul style={{ textAlign: "left", listStyle: "none", padding: 0 }}>
 								{plan.features.map((f) => (
 									<Feature key={f}>
