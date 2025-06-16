@@ -60,10 +60,7 @@ export default function DataAccess() {
 						<code>https://www.googleapis.com/auth/youtube.upload</code> – upload
 						the final rendered video you explicitly approve.
 					</li>
-					<li>
-						<code>https://www.googleapis.com/auth/youtube.readonly</code> – read
-						basic channel metadata to avoid scheduling conflicts.
-					</li>
+
 					<li>
 						<code>profile</code> / <code>email</code> – show your channel name
 						inside the dashboard and send you rendering notifications.
