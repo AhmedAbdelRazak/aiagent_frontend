@@ -11,22 +11,17 @@ export default function Overview() {
 
 	useEffect(() => {
 		(async () => {
-			const { data } = await axios.get("/admin/metrics/overview"); // **backend addition below**
+			const { data } = await axios.get("/user/metrics/overview"); // **backend addition below**
 			setStats(data);
 		})();
 	}, []);
 
 	return (
 		<>
-			<SeoHead title='Admin Overview' />
+			<SeoHead title='Client Overview' />
 			<h2>Overview</h2>
 			{stats && (
 				<Row gutter={16}>
-					<Col span={6}>
-						<Card>
-							<Statistic title='Total Users' value={stats.users} />
-						</Card>
-					</Col>
 					<Col span={6}>
 						<Card>
 							<Statistic title='Videos Today' value={stats.videosToday} />

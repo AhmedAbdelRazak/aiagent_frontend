@@ -1,4 +1,4 @@
-// app/signup/page.js
+// File: app/signup/page.js
 "use client";
 
 import React, { useState } from "react";
@@ -20,19 +20,24 @@ const SignupContainer = styled.section`
 `;
 
 export default function SignupPage() {
-	// Now simply useAuth().signup(...) which handles both storing token and redirect
 	const { signup } = useAuth();
 	const [loading, setLoading] = useState(false);
 
 	const onFinish = async (values) => {
 		setLoading(true);
 		try {
-			const { name, email, password, platforms } = values;
-			// This calls our updated signup in AuthProvider:
-			await signup(name, email, password, platforms);
-			// On success, signup(...) does the redirect. No need to setLoading(false) here.
+			const { name, email, password, platforms, acceptedTermsAndConditions } =
+				values;
+
+			await signup(
+				name,
+				email,
+				password,
+				platforms,
+				acceptedTermsAndConditions // NEW ARG
+			);
+			// signup() handles redirect on success
 		} catch (err) {
-			// If backend returned a JSON error, err.response.data.error will be available.
 			message.error(
 				err?.response?.data?.error || err.message || "Signup failed"
 			);
@@ -47,11 +52,18 @@ export default function SignupPage() {
 				description='Create your AgentAI account to begin scheduling AI posts.'
 				keywords='AgentAI signup, AI social media signup'
 			/>
+
 			<SignupContainer>
 				<Title level={2} style={{ textAlign: "center", marginBottom: "1rem" }}>
-					Sign Up
+					Sign Up
 				</Title>
-				<Form layout='vertical' onFinish={onFinish}>
+
+				<Form
+					layout='vertical'
+					onFinish={onFinish}
+					initialValues={{ platforms: [], acceptedTermsAndConditions: false }}
+				>
+					{/* Name */}
 					<Form.Item
 						label='Name'
 						name='name'
@@ -60,6 +72,7 @@ export default function SignupPage() {
 						<Input placeholder='Your name' />
 					</Form.Item>
 
+					{/* Email */}
 					<Form.Item
 						label='Email'
 						name='email'
@@ -71,6 +84,7 @@ export default function SignupPage() {
 						<Input placeholder='you@example.com' />
 					</Form.Item>
 
+					{/* Password */}
 					<Form.Item
 						label='Password'
 						name='password'
@@ -79,6 +93,7 @@ export default function SignupPage() {
 						<Input.Password placeholder='••••••••' />
 					</Form.Item>
 
+					{/* Platforms */}
 					<Form.Item
 						name='platforms'
 						label='Platform(s) you want to post to:'
@@ -99,14 +114,45 @@ export default function SignupPage() {
 						</Checkbox.Group>
 					</Form.Item>
 
+					{/* Terms & Conditions */}
+					<Form.Item
+						name='acceptedTermsAndConditions'
+						valuePropName='checked'
+						rules={[
+							{
+								validator: (_, checked) =>
+									checked
+										? Promise.resolve()
+										: Promise.reject(
+												new Error(
+													"You must accept the Terms & Conditions to continue."
+												)
+											),
+							},
+						]}
+					>
+						<Checkbox>
+							I have read and accept the&nbsp;
+							<Link href='/terms' target='_blank'>
+								Terms&nbsp;&amp;&nbsp;Conditions
+							</Link>{" "}
+							and&nbsp;
+							<Link href='/privacy' target='_blank'>
+								Privacy Policy
+							</Link>
+							.
+						</Checkbox>
+					</Form.Item>
+
+					{/* Submit */}
 					<Form.Item>
 						<Button type='primary' htmlType='submit' loading={loading} block>
-							Sign Up
+							Sign Up
 						</Button>
 					</Form.Item>
 
-					<Form.Item>
-						<Link href='/login'>Already have an account? Login</Link>
+					<Form.Item style={{ marginBottom: 0 }}>
+						<Link href='/login'>Already have an account? Login</Link>
 					</Form.Item>
 				</Form>
 			</SignupContainer>
