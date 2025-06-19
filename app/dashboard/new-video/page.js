@@ -99,6 +99,7 @@ export default function NewVideo() {
 		flow: "auth-code",
 		access_type: "offline",
 		prompt: "consent",
+		include_granted_scopes: false,
 		scope:
 			"https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/userinfo.email",
 		redirect_uri: "http://localhost:8102/api/youtube/callback",
