@@ -1,7 +1,6 @@
 // components/GenerationModal.jsx
-
 import React from "react";
-import { Modal, Steps, Typography, Progress } from "antd";
+import { Modal, Steps, Typography, Progress, Row, Col } from "antd";
 import {
 	LoadingOutlined,
 	CheckCircleOutlined,
@@ -20,16 +19,12 @@ import {
 const { Step } = Steps;
 const { Text, Paragraph, Link } = Typography;
 
-/*
- * 1.  Single‑source‑of‑truth for every backend phase
- *     ------------------------------------------------
- *     – Order here **must exactly match** the order the backend
- *       reports them in createVideo.js (sendPhase(...)).
- *     – If you ever add / rename a phase backend‑side, just
- *       update this table and the UI stays in sync.
- */
+/* ──────────────────────────────────────────────
+ * 1.  Single source‑of‑truth for backend phases
+ *     (order MUST match createVideo.js)
+ * ────────────────────────────────────────────── */
 const PHASE_DEFS = [
-	{ key: "INIT", title: "Initializing", icon: <RocketOutlined /> },
+	{ key: "INIT", title: "Initialising", icon: <RocketOutlined /> },
 	{
 		key: "USING_UPLOADED_IMAGE",
 		title: "Applying Seed Image",
@@ -52,7 +47,7 @@ const PHASE_DEFS = [
 	},
 	{
 		key: "SYNCING_VOICE_MUSIC",
-		title: "Syncing Voice & Music",
+		title: "Syncing Audio",
 		icon: <SyncOutlined />,
 	},
 	{
@@ -64,99 +59,169 @@ const PHASE_DEFS = [
 	{ key: "COMPLETED", title: "Completed", icon: <SmileOutlined /> },
 ];
 
-/*
- * 2.  Helper to convert phase → index   (‑1 if unknown)
- */
-function phaseIndex(phase) {
-	return PHASE_DEFS.findIndex(({ key }) => key === phase);
-}
+/* quick lookup */
+const phaseIndex = (phase) => PHASE_DEFS.findIndex(({ key }) => key === phase);
 
-/*
- * 3.  The component
- */
+/* ──────────────────────────────────────────────
+ *    React component
+ * ────────────────────────────────────────────── */
 export default function GenerationModal({ open, phase, extra = {}, onClose }) {
+	// high‑level phase position
 	const currentIdx = phaseIndex(phase);
 
-	// Render -------------------------------------------------------------------
-	return (
-		<Modal
-			title='Video Generation Progress (≈ 5‑6 min)'
-			open={open}
-			footer={null}
-			onCancel={onClose}
-			width={640}
-			destroyOnClose
-		>
-			{/* Visual stepper ------------------------------------------------------ */}
-			<Steps direction='vertical' current={currentIdx}>
-				{PHASE_DEFS.map(({ key, title, icon }, idx) => {
-					// work out status & icon for each row
-					let status = "wait";
-					if (idx < currentIdx) status = "finish";
-					else if (idx === currentIdx)
-						status = phase === "COMPLETED" ? "finish" : "process";
+	/* ------------------------------------------------------------
+	 * Segment‑level progress
+	 *  – backend currently sends messages like:
+	 *        "Rendering segment 3/6"
+	 *  – OPTIONALLY you can also send   extra.done / extra.total
+	 * ---------------------------------------------------------- */
+	let segDone = null;
+	let segTotal = null;
 
-					const rowIcon =
+	if (typeof extra.done === "number" && typeof extra.total === "number") {
+		segDone = extra.done;
+		segTotal = extra.total;
+	} else if (extra.msg) {
+		const m = /segment\s+(\d+)\s*\/\s*(\d+)/i.exec(extra.msg);
+		if (m) {
+			segDone = Number(m[1]);
+			segTotal = Number(m[2]);
+		}
+	}
+
+	/* ------------------------------------------------------------
+	 * helpers to pick icon / status for each main step
+	 * ---------------------------------------------------------- */
+	const renderMainSteps = () => (
+		<Steps direction='vertical' current={currentIdx}>
+			{PHASE_DEFS.map(({ key, title, icon }, idx) => {
+				let status = "wait";
+				if (idx < currentIdx) status = "finish";
+				else if (idx === currentIdx)
+					status = phase === "COMPLETED" ? "finish" : "process";
+
+				const shownIcon =
+					status === "finish" ? (
+						<CheckCircleOutlined style={{ color: "#52c41a" }} />
+					) : status === "process" ? (
+						<LoadingOutlined />
+					) : (
+						icon
+					);
+
+				return (
+					<Step
+						key={key}
+						title={title}
+						icon={shownIcon}
+						status={status}
+						description={
+							idx === currentIdx && extra.msg ? (
+								<Text type='secondary'>{extra.msg}</Text>
+							) : null
+						}
+					/>
+				);
+			})}
+		</Steps>
+	);
+
+	/* ------------------------------------------------------------
+	 * segment stepper (visible only during clip‑generation loop)
+	 * ---------------------------------------------------------- */
+	const renderSegmentStepper = () => {
+		if (!segTotal || !segDone) return null;
+
+		const items = Array.from({ length: segTotal }, (_, i) => {
+			const idx = i + 1;
+			let status = "wait";
+			if (idx < segDone) status = "finish";
+			else if (idx === segDone) status = "process";
+
+			return (
+				<Step
+					key={idx}
+					title={`#${idx}`}
+					status={status}
+					icon={
 						status === "finish" ? (
-							<CheckCircleOutlined style={{ color: "#52c41a" }} />
+							<CheckCircleOutlined style={{ color: "#1890ff" }} />
 						) : status === "process" ? (
 							<LoadingOutlined />
 						) : (
-							icon
-						);
+							<VideoCameraOutlined />
+						)
+					}
+				/>
+			);
+		});
 
-					return (
-						<Step
-							key={key}
-							title={title}
-							icon={rowIcon}
-							status={status}
-							description={
-								idx === currentIdx && extra.msg ? (
-									<Text type='secondary'>{extra.msg}</Text>
-								) : null
-							}
-						/>
-					);
-				})}
-			</Steps>
+		return (
+			<>
+				<Row style={{ marginTop: 24 }}>
+					<Col span={24}>
+						<Text strong>Clip progress</Text>
+					</Col>
+				</Row>
+				<Steps
+					size='small'
+					current={segDone - 1}
+					progressDot
+					responsive={false}
+				>
+					{items}
+				</Steps>
+				<Progress
+					style={{ marginTop: 8 }}
+					percent={Math.round((segDone / segTotal) * 100)}
+					size='small'
+				/>
+			</>
+		);
+	};
 
-			{/* Optional progress bar from backend (extra.total / extra.done) ------- */}
-			{typeof extra.total === "number" && typeof extra.done === "number" && (
-				<div style={{ marginTop: 24 }}>
-					<Progress
-						percent={Math.min(
-							100,
-							Math.round((extra.done / extra.total) * 100)
-						)}
-						showInfo
+	/* ------------------------------------------------------------
+	 * final YouTube link
+	 * ---------------------------------------------------------- */
+	const renderYoutubeLink = () =>
+		phase === "COMPLETED" &&
+		extra.youtubeLink && (
+			<div style={{ marginTop: 32, textAlign: "center" }}>
+				<Paragraph>
+					<YoutubeOutlined
+						style={{ fontSize: 32, color: "#FF0000", marginRight: 8 }}
 					/>
-				</div>
-			)}
+					<Text strong style={{ fontSize: 18 }}>
+						Watch on YouTube
+					</Text>
+				</Paragraph>
+				<Paragraph copyable={{ text: extra.youtubeLink }}>
+					<Link
+						href={extra.youtubeLink}
+						target='_blank'
+						rel='noopener noreferrer'
+					>
+						{extra.youtubeLink}
+					</Link>
+				</Paragraph>
+			</div>
+		);
 
-			{/* Final YouTube link -------------------------------------------------- */}
-			{phase === "COMPLETED" && extra.youtubeLink && (
-				<div style={{ marginTop: 32, textAlign: "center" }}>
-					<Paragraph>
-						<YoutubeOutlined
-							style={{ fontSize: 32, color: "#FF0000", marginRight: 8 }}
-						/>
-						<Text strong style={{ fontSize: 18 }}>
-							Watch on YouTube
-						</Text>
-					</Paragraph>
-
-					<Paragraph copyable={{ text: extra.youtubeLink }}>
-						<Link
-							href={extra.youtubeLink}
-							target='_blank'
-							rel='noopener noreferrer'
-						>
-							{extra.youtubeLink}
-						</Link>
-					</Paragraph>
-				</div>
-			)}
+	/* ------------------------------------------------------------
+	 * render modal
+	 * ---------------------------------------------------------- */
+	return (
+		<Modal
+			title='Video Generation Progress'
+			open={open}
+			footer={null}
+			onCancel={onClose}
+			width={680}
+			destroyOnClose
+		>
+			{renderMainSteps()}
+			{renderSegmentStepper()}
+			{renderYoutubeLink()}
 		</Modal>
 	);
 }
