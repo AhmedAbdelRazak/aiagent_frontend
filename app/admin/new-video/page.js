@@ -102,7 +102,7 @@ export default function NewVideo() {
 		include_granted_scopes: false,
 		scope:
 			"https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/userinfo.email",
-		redirect_uri: "http://localhost:8102/api/youtube/callback",
+		redirect_uri: "https://aivideomatic.com/api/youtube/callback",
 		onSuccess: async (codeResponse) => {
 			try {
 				setSavingTokens(true);
