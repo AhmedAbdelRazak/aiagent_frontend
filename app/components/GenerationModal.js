@@ -212,7 +212,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 	 * ---------------------------------------------------------- */
 	return (
 		<Modal
-			title='Video Generation Progress'
+			title='Video Generation Progress (This may take ~5 to 7 minutes)'
 			open={open}
 			footer={null}
 			onCancel={onClose}
