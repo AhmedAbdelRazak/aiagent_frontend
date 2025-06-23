@@ -321,7 +321,9 @@ export default function NewVideo() {
 						rules={[{ required: true, message: "Please select a category" }]}
 					>
 						<Select placeholder='Select category'>
-							<Select.Option value='Top5'>Top 5</Select.Option>
+							<Select.Option value='Other'>
+								Most Trending (All Topics)
+							</Select.Option>
 							<Select.Option value='Sports'>Sports</Select.Option>
 							<Select.Option value='Politics'>Politics</Select.Option>
 							<Select.Option value='Finance'>Finance</Select.Option>
@@ -331,7 +333,20 @@ export default function NewVideo() {
 							<Select.Option value='World'>World</Select.Option>
 							<Select.Option value='Lifestyle'>Lifestyle</Select.Option>
 							<Select.Option value='Science'>Science</Select.Option>
-							<Select.Option value='Other'>Other</Select.Option>
+
+							{/* 9 new categories */}
+							<Select.Option value='Gaming'>Gaming</Select.Option>
+							<Select.Option value='Business'>Business</Select.Option>
+							<Select.Option value='Travel'>Travel</Select.Option>
+							<Select.Option value='FoodDrink'>Food & Drink</Select.Option>
+							<Select.Option value='CelebrityNews'>
+								Celebrity News
+							</Select.Option>
+							<Select.Option value='Climate'>Climate</Select.Option>
+							<Select.Option value='SocialIssues'>Social Issues</Select.Option>
+							<Select.Option value='Education'>Education</Select.Option>
+							<Select.Option value='Fashion'>Fashion</Select.Option>
+							<Select.Option value='Top5'>Top 5</Select.Option>
 						</Select>
 					</Form.Item>
 
@@ -472,18 +487,16 @@ export default function NewVideo() {
 								<Select.Option value='all countries'>
 									All Countries
 								</Select.Option>
-								<Select.Option value='United States of America'>
-									United States
-								</Select.Option>
-								<Select.Option value='Germany'>Germany</Select.Option>
-								<Select.Option value='France'>France</Select.Option>
-								<Select.Option value='UK'>UK</Select.Option>
-								<Select.Option value='Australia'>Australia</Select.Option>
-								<Select.Option value='Kuwait'>Kuwait</Select.Option>
-								<Select.Option value='UAE'>UAE</Select.Option>
-								<Select.Option value='KSA'>KSA</Select.Option>
-								<Select.Option value='India'>India</Select.Option>
-								<Select.Option value='Egypt'>Egypt</Select.Option>
+								<Select.Option value='US'>United States</Select.Option>
+								<Select.Option value='DE'>Germany</Select.Option>
+								<Select.Option value='FR'>France</Select.Option>
+								<Select.Option value='GB'>UK</Select.Option>
+								<Select.Option value='AU'>Australia</Select.Option>
+								<Select.Option value='KW'>Kuwait</Select.Option>
+								<Select.Option value='AE'>UAE</Select.Option>
+								<Select.Option value='SA'>KSA</Select.Option>
+								<Select.Option value='IN'>India</Select.Option>
+								<Select.Option value='EG'>Egypt</Select.Option>
 							</Select>
 						</Form.Item>
 					</Row>
