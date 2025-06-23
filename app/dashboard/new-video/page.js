@@ -339,6 +339,9 @@ export default function NewVideo() {
 							<Select.Option value='Business'>Business</Select.Option>
 							<Select.Option value='Travel'>Travel</Select.Option>
 							<Select.Option value='FoodDrink'>Food & Drink</Select.Option>
+							<Select.Option value='PetsAndAnimals'>
+								Pets and Animals
+							</Select.Option>
 							<Select.Option value='CelebrityNews'>
 								Celebrity News
 							</Select.Option>
