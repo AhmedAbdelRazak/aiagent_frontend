@@ -298,7 +298,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 			footer={null}
 			onCancel={onClose}
 			width={680}
-			destroyOnHidden
+			destroyOnClose
 		>
 			{renderMainSteps()}
 			{renderSegmentStepper()}
