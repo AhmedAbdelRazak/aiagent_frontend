@@ -5,7 +5,6 @@ import {
 	LoadingOutlined,
 	CheckCircleOutlined,
 	RocketOutlined,
-	PictureOutlined,
 	MergeCellsOutlined,
 	VideoCameraOutlined,
 	AudioOutlined,
@@ -28,7 +27,7 @@ const { Text, Paragraph, Link } = Typography;
  *            separately in a warning list.
  * ────────────────────────────────────────────── */
 const PHASE_DEFS = [
-	{ key: "INIT", title: "Initialising", icon: <RocketOutlined /> },
+	{ key: "INIT", title: "Initializing", icon: <RocketOutlined /> },
 	{
 		key: "GENERATING_CLIPS",
 		title: "Generating Clips",
