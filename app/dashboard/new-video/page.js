@@ -34,6 +34,7 @@ import {
 	FileTextOutlined,
 	VideoCameraAddOutlined,
 	PlusOutlined,
+	LoadingOutlined,
 } from "@ant-design/icons";
 import { useGoogleLogin } from "@react-oauth/google";
 import GenerationModal from "@/components/GenerationModal";
@@ -59,25 +60,29 @@ const fileToBase64 = (file) =>
 	});
 
 export default function NewVideo() {
-	const [loading, setLoading] = useState(false);
+	/* ───────────────────────────────
+	 * Local state
+	 * ─────────────────────────────── */
+	const [loading, setLoading] = useState(false); // pre‑flight call / validation
+	const [generating, setGenerating] = useState(false); // true while SSE stream active
 	const [schedEnabled, setSchedEnabled] = useState(false);
 	const [profileLoading, setProfileLoading] = useState(true);
-	const [userProfile, setUserProfile] = useState(null);
 	const [savingTokens, setSavingTokens] = useState(false);
+	const [userProfile, setUserProfile] = useState(null);
 
-	/* image‑upload state */
-	const [fileList, setFileList] = useState([]); // Ant Design Upload files
+	/* image upload */
+	const [fileList, setFileList] = useState([]);
 	const [videoImage, setVideoImage] = useState(null); // { public_id, url } | null
 
-	/* SSE + modal state */
+	/* SSE + modal */
 	const [modalOpen, setModalOpen] = useState(false);
 	const [phase, setPhase] = useState("INIT");
 	const [extra, setExtra] = useState({});
 	const sseReaderRef = useRef(null);
 
-	/*─────────────────────────────────────────────────────────────*/
-	/* 1) Fetch user profile                                       */
-	/*─────────────────────────────────────────────────────────────*/
+	/* ───────────────────────────────
+	 * Fetch user profile once
+	 * ─────────────────────────────── */
 	useEffect(() => {
 		(async () => {
 			try {
@@ -92,9 +97,9 @@ export default function NewVideo() {
 		})();
 	}, []);
 
-	/*─────────────────────────────────────────────────────────────*/
-	/* 2) Google login hook                                        */
-	/*─────────────────────────────────────────────────────────────*/
+	/* ───────────────────────────────
+	 * Google‑OAuth helper
+	 * ─────────────────────────────── */
 	const googleLogin = useGoogleLogin({
 		flow: "auth-code",
 		access_type: "offline",
@@ -117,24 +122,22 @@ export default function NewVideo() {
 			}
 		},
 		onError: () => {
-			message.error("Google sign-in failed or was cancelled.");
+			message.error("Google sign‑in failed or was cancelled.");
 		},
 	});
 
-	/*─────────────────────────────────────────────────────────────*/
-	/* 3) Image upload helpers                                     */
-	/*─────────────────────────────────────────────────────────────*/
+	/* ───────────────────────────────
+	 * Image‑upload helpers
+	 * ─────────────────────────────── */
 	const beforeUpload = (file) => {
 		if (file.size / 1024 / 1024 > 5) {
-			message.error("Image must be smaller than 5 MB.");
+			message.error("Image must be smaller than 5 MB.");
 			return Upload.LIST_IGNORE;
 		}
 		return true;
 	};
-
 	const handleCustomRequest = async ({ file, onSuccess, onError }) => {
 		try {
-			/* remove previous image if any */
 			if (videoImage?.public_id) {
 				await axios.post("/removeimage", { public_id: videoImage.public_id });
 			}
@@ -156,7 +159,6 @@ export default function NewVideo() {
 			message.error("Upload failed");
 		}
 	};
-
 	const handleRemove = async (file) => {
 		try {
 			await axios.post("/removeimage", { public_id: file.public_id });
@@ -167,20 +169,33 @@ export default function NewVideo() {
 		}
 	};
 
-	/*─────────────────────────────────────────────────────────────*/
-	/* 4) Form submission & SSE hookup                             */
-	/*─────────────────────────────────────────────────────────────*/
+	/* ───────────────────────────────
+	 * Helper – close SSE cleanly
+	 * ─────────────────────────────── */
+	const cancelStream = () => {
+		try {
+			sseReaderRef.current?.cancel?.();
+		} catch {}
+		sseReaderRef.current = null;
+	};
+
+	/* ───────────────────────────────
+	 * Form submit  ➜  kick off backend
+	 * ─────────────────────────────── */
 	const onFinish = async (values) => {
+		/* Already generating?  Just reopen modal. */
+		if (generating) {
+			setModalOpen(true);
+			return;
+		}
+
 		setModalOpen(true);
 		setPhase("INIT");
 		setExtra({});
-
-		if (sseReaderRef.current) {
-			sseReaderRef.current.cancel();
-			sseReaderRef.current = null;
-		}
-
 		setLoading(true);
+		setGenerating(true);
+
+		cancelStream(); // safety
 		try {
 			const payload = {
 				category: values.category,
@@ -194,9 +209,7 @@ export default function NewVideo() {
 				...(values.customPrompt?.trim() && {
 					customPrompt: values.customPrompt.trim(),
 				}),
-				/* optional cover image */
 				...(videoImage && { videoImage }),
-				/* YouTube token bundle required by schema */
 				youtubeAccessToken: userProfile?.youtubeAccessToken || "",
 				youtubeRefreshToken: userProfile?.youtubeRefreshToken || "",
 				youtubeTokenExpiresAt: userProfile?.youtubeTokenExpiresAt || null,
@@ -227,6 +240,7 @@ export default function NewVideo() {
 			});
 			if (!res.body) throw new Error("Server does not support streaming.");
 
+			/* ‑‑‑ Stream Reader */
 			const reader = res.body.getReader();
 			sseReaderRef.current = reader;
 			const decoder = new TextDecoder("utf-8");
@@ -247,6 +261,10 @@ export default function NewVideo() {
 							);
 							setPhase(p);
 							setExtra(e || {});
+							/* Terminate generating flag on completion / error */
+							if (p === "COMPLETED" || p === "ERROR") {
+								setGenerating(false);
+							}
 						} catch {
 							console.warn("Malformed SSE chunk:", chunk);
 						}
@@ -256,14 +274,18 @@ export default function NewVideo() {
 			reader.releaseLock();
 		} catch (err) {
 			message.error(err.message || "Error starting generation");
+			setGenerating(false);
 		} finally {
 			setLoading(false);
 		}
 	};
 
-	/*─────────────────────────────────────────────────────────────*/
-	/* 5) Loading spinner                                          */
-	/*─────────────────────────────────────────────────────────────*/
+	/* cleanup on unmount */
+	useEffect(() => cancelStream, []);
+
+	/* ───────────────────────────────
+	 * UI helpers
+	 * ─────────────────────────────── */
 	if (profileLoading) {
 		return (
 			<div style={{ textAlign: "center", marginTop: "3rem" }}>
@@ -274,6 +296,12 @@ export default function NewVideo() {
 
 	const isAdmin = userProfile?.role === "admin";
 	const hasYouTube = Boolean(userProfile?.youtubeRefreshToken);
+	const buttonLabel = generating ? "Progressing…" : "Generate";
+	const buttonIcon = generating ? (
+		<LoadingOutlined />
+	) : (
+		<VideoCameraAddOutlined />
+	);
 
 	return (
 		<>
@@ -303,6 +331,7 @@ export default function NewVideo() {
 				<Form
 					layout='vertical'
 					onFinish={onFinish}
+					disabled={generating} /* lock inputs while generating */
 					initialValues={{
 						startDate: dayjs(),
 						language: "English",
@@ -595,12 +624,11 @@ export default function NewVideo() {
 					{/* Submit */}
 					<Button
 						type='primary'
-						icon={<VideoCameraAddOutlined />}
+						icon={buttonIcon}
 						htmlType='submit'
-						loading={loading}
-						disabled={!hasYouTube && !isAdmin}
+						loading={loading && !generating}
 					>
-						Generate
+						{buttonLabel}
 					</Button>
 				</Form>
 			</Card>

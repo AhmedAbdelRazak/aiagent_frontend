@@ -1,6 +1,17 @@
 // components/GenerationModal.jsx
-import { useEffect, useRef, useState } from "react";
-import { Modal, Steps, Typography, Progress, Row, Col, Alert, Tag } from "antd";
+import { useEffect, useRef, useState, useMemo } from "react";
+import {
+	Modal,
+	Steps,
+	Typography,
+	Progress,
+	Row,
+	Col,
+	Alert,
+	Tag,
+	Divider,
+	Space,
+} from "antd";
 import {
 	LoadingOutlined,
 	CheckCircleOutlined,
@@ -15,16 +26,17 @@ import {
 	YoutubeOutlined,
 	ExclamationCircleOutlined,
 	MinusCircleOutlined,
+	PlayCircleOutlined,
 } from "@ant-design/icons";
 
 const { Step } = Steps;
 const { Text, Paragraph, Link } = Typography;
 
 /* ────────────────────────────────────────────
- * Backend phases in exact order
+ * Backend phases (keep SAME order as backend)
  * ──────────────────────────────────────────── */
 const PHASE_DEFS = [
-	{ key: "INIT", title: "Initializing Job", icon: <RocketOutlined /> },
+	{ key: "INIT", title: "Starting Up", icon: <RocketOutlined /> },
 	{
 		key: "GENERATING_CLIPS",
 		title: "Generating Clips",
@@ -40,27 +52,36 @@ const PHASE_DEFS = [
 		title: "Adding Voice & Music",
 		icon: <AudioOutlined />,
 	},
-	{
-		key: "SYNCING_VOICE_MUSIC",
-		title: "Syncing Audio",
-		icon: <SyncOutlined />,
-	},
+	{ key: "SYNCING_VOICE_MUSIC", title: "Final Sync", icon: <SyncOutlined /> },
 	{
 		key: "VIDEO_UPLOADED",
 		title: "Uploaded to YouTube",
 		icon: <UploadOutlined />,
 	},
-	{ key: "VIDEO_SCHEDULED", title: "Scheduled", icon: <CalendarOutlined /> }, // *optional*
+	{ key: "VIDEO_SCHEDULED", title: "Scheduled", icon: <CalendarOutlined /> }, // optional
 	{ key: "COMPLETED", title: "Completed", icon: <SmileOutlined /> },
 	{ key: "ERROR", title: "Failed", icon: <ExclamationCircleOutlined /> }, // terminal
 ];
 
-/* quick helper */
+/* Helper */
 const phaseIndex = (p) => PHASE_DEFS.findIndex(({ key }) => key === p);
+
+/* Friendly, plain‑English status banner texts */
+const STATUS_TEXT = {
+	INIT: "Warming up the engines…",
+	GENERATING_CLIPS: "Creating your video scenes",
+	ASSEMBLING_VIDEO: "Stitching scenes together",
+	ADDING_VOICE_MUSIC: "Recording voice‑over & mixing music",
+	SYNCING_VOICE_MUSIC: "Syncing audio with visuals",
+	VIDEO_UPLOADED: "Upload finished!",
+	VIDEO_SCHEDULED: "Video scheduled for publishing",
+	COMPLETED: "All done – enjoy your new video 🎬",
+	ERROR: "Something went wrong 😕",
+};
 
 export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 	/* ──────────────────────────────────────────
-	 * Track the *last* main‑phase (ignore FALLBACK)
+	 * Remember the last *main* phase (ignore FALLBACK)
 	 * ────────────────────────────────────────── */
 	const lastMainPhaseRef = useRef("INIT");
 	useEffect(() => {
@@ -68,12 +89,11 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 			lastMainPhaseRef.current = phase;
 		}
 	}, [phase]);
-
 	const currentMainPhase = lastMainPhaseRef.current;
 	const currentIdx = phaseIndex(currentMainPhase);
 
 	/* ──────────────────────────────────────────
-	 * Clip‑generation loop progress
+	 * Segment progress (from GENERATING_CLIPS)
 	 * ────────────────────────────────────────── */
 	const [segDone, segTotal] = (() => {
 		if (typeof extra.done === "number" && typeof extra.total === "number") {
@@ -87,7 +107,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 	})();
 
 	/* ──────────────────────────────────────────
-	 * Collection of FALLBACK notices
+	 * Store FALLBACK notifications
 	 * ────────────────────────────────────────── */
 	const [fallbacks, setFallbacks] = useState([]);
 	useEffect(() => {
@@ -110,19 +130,52 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 	}, [phase, open]);
 
 	/* ──────────────────────────────────────────
-	 *   Main stepper renderer
+	 * Banner at top: plain English status
+	 * ────────────────────────────────────────── */
+	const renderStatusBanner = () => {
+		const text = STATUS_TEXT[currentMainPhase] || "Working…";
+		const Icon =
+			currentMainPhase === "ERROR"
+				? ExclamationCircleOutlined
+				: currentMainPhase === "COMPLETED"
+					? CheckCircleOutlined
+					: PlayCircleOutlined;
+		return (
+			<Space
+				style={{
+					width: "100%",
+					padding: "8px 0 20px 0",
+					justifyContent: "center",
+				}}
+			>
+				<Icon
+					style={{
+						fontSize: 18,
+						color:
+							currentMainPhase === "ERROR"
+								? "#ff4d4f"
+								: currentMainPhase === "COMPLETED"
+									? "#52c41a"
+									: "#1890ff",
+					}}
+				/>
+				<Text strong>{text}</Text>
+			</Space>
+		);
+	};
+
+	/* ──────────────────────────────────────────
+	 * Primary stepper (vertical)
 	 * ────────────────────────────────────────── */
 	const renderMainSteps = () => (
 		<Steps direction='vertical' current={currentIdx}>
 			{PHASE_DEFS.map(({ key, title, icon }, idx) => {
-				/* optional schedule logic */
 				const isScheduleStep = key === "VIDEO_SCHEDULED";
 				const scheduleSkipped =
 					isScheduleStep && currentMainPhase === "COMPLETED" && !scheduleSeen;
 
 				let status = "wait";
-				if (scheduleSkipped)
-					status = "finish"; // mark as completed‑skipped
+				if (scheduleSkipped) status = "finish";
 				else if (idx < currentIdx) status = "finish";
 				else if (idx === currentIdx)
 					status =
@@ -144,7 +197,6 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 					icon
 				);
 
-				/* dynamic subtitle */
 				const desc = scheduleSkipped
 					? "Not scheduled"
 					: idx === currentIdx && extra.msg
@@ -165,7 +217,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 	);
 
 	/* ──────────────────────────────────────────
-	 *   Segment mini‑stepper
+	 * Mini‑stepper for segment loop
 	 * ────────────────────────────────────────── */
 	const renderSegmentStepper = () => {
 		if (!segTotal || !segDone) return null;
@@ -188,7 +240,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 			<>
 				<Row style={{ marginTop: 24 }}>
 					<Col span={24}>
-						<Text strong>Clip progress</Text>
+						<Text strong>Clip progress</Text>
 					</Col>
 				</Row>
 				<Steps
@@ -209,14 +261,14 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 	};
 
 	/* ──────────────────────────────────────────
-	 *   Fallback alerts
+	 * Fallback alerts
 	 * ────────────────────────────────────────── */
 	const renderFallbackAlerts = () =>
 		fallbacks.length > 0 && (
 			<>
 				<Row style={{ marginTop: 24 }}>
 					<Col span={24}>
-						<Text strong>Fallbacks &amp; Auto‑recovery</Text>
+						<Text strong>Auto‑recovery events</Text>
 					</Col>
 				</Row>
 				{fallbacks.map(({ segment, type, reason }, i) => (
@@ -237,34 +289,34 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 		);
 
 	/* ──────────────────────────────────────────
-	 *   Final YouTube link
+	 * YouTube link display
 	 * ────────────────────────────────────────── */
+	const youtubeLink =
+		extra.youtubeLink ||
+		(currentMainPhase === "COMPLETED" &&
+			extra?.phases?.find?.((p) => p.extra?.youtubeLink)?.extra?.youtubeLink); // guard if link came earlier
+
 	const renderYoutubeLink = () =>
-		currentMainPhase === "COMPLETED" &&
-		extra.youtubeLink && (
+		youtubeLink && (
 			<div style={{ marginTop: 32, textAlign: "center" }}>
 				<Paragraph>
-					<YoutubeOutlined
-						style={{ fontSize: 32, color: "#FF0000", marginRight: 8 }}
-					/>
+					<YoutubeOutlined style={{ fontSize: 32, color: "#FF0000" }} />
+				</Paragraph>
+				<Paragraph>
 					<Text strong style={{ fontSize: 18 }}>
-						Watch on YouTube
+						Your video is live on YouTube
 					</Text>
 				</Paragraph>
-				<Paragraph copyable={{ text: extra.youtubeLink }}>
-					<Link
-						href={extra.youtubeLink}
-						target='_blank'
-						rel='noopener noreferrer'
-					>
-						{extra.youtubeLink}
+				<Paragraph copyable={{ text: youtubeLink }}>
+					<Link href={youtubeLink} target='_blank' rel='noopener noreferrer'>
+						{youtubeLink}
 					</Link>
 				</Paragraph>
 			</div>
 		);
 
 	/* ──────────────────────────────────────────
-	 *   Fatal error state
+	 * Error state message
 	 * ────────────────────────────────────────── */
 	const renderErrorMessage = () =>
 		currentMainPhase === "ERROR" && (
@@ -272,10 +324,10 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 				style={{ marginTop: 24 }}
 				showIcon
 				type='error'
-				message='Something went wrong.'
+				message='Generation failed'
 				description={
 					<>
-						Please refresh the page and try again. If the issue persists,&nbsp;
+						We couldn’t finish this video. Please try again or&nbsp;
 						<Link href='/contact'>contact support</Link>.
 					</>
 				}
@@ -283,23 +335,38 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 		);
 
 	/* ──────────────────────────────────────────
-	 *   Render modal
+	 * Modal props
 	 * ────────────────────────────────────────── */
+	const isTerminal =
+		currentMainPhase === "COMPLETED" || currentMainPhase === "ERROR";
+
 	return (
 		<Modal
-			title='Video Generation Progress (≈ 5‑7 minutes)'
+			title='Video Generation Progress (≈ 5‑7 min)'
 			open={open}
 			footer={null}
-			onCancel={onClose}
-			width={700}
+			onCancel={isTerminal ? onClose : undefined}
+			closable={isTerminal}
+			width={720}
 			destroyOnClose
 			maskClosable={false}
 		>
+			{renderStatusBanner()}
 			{renderMainSteps()}
 			{renderSegmentStepper()}
 			{renderFallbackAlerts()}
 			{renderYoutubeLink()}
 			{renderErrorMessage()}
+			{isTerminal && <Divider />}
+			{isTerminal && (
+				<Row justify='center' style={{ marginTop: 12 }}>
+					<Col>
+						<Text type='secondary'>
+							You may safely close this window or start another generation.
+						</Text>
+					</Col>
+				</Row>
+			)}
 		</Modal>
 	);
 }
