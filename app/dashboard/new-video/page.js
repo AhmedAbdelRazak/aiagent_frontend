@@ -196,6 +196,26 @@ export default function NewVideo() {
 		setGenerating(true);
 
 		cancelStream(); // safety
+
+		const processBuffer = () => {
+			const parts = buffer.split(/\r?\n\r?\n/);
+			buffer = parts.pop(); // keep trailing partial
+			parts.forEach((chunk) => {
+				if (chunk.startsWith("data:")) {
+					try {
+						const { phase: p, extra: e } = JSON.parse(
+							chunk.replace(/^data:/, "")
+						);
+						setPhase(p);
+						setExtra(e || {});
+						if (p === "COMPLETED" || p === "ERROR") setGenerating(false);
+					} catch {
+						console.warn("Malformed SSE chunk:", chunk);
+					}
+				}
+			});
+		};
+
 		try {
 			const payload = {
 				category: values.category,
@@ -271,6 +291,7 @@ export default function NewVideo() {
 					}
 				});
 			}
+			processBuffer();
 			reader.releaseLock();
 		} catch (err) {
 			message.error(err.message || "Error starting generation");
