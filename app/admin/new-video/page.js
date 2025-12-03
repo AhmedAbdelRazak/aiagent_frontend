@@ -35,6 +35,7 @@ import {
 	VideoCameraAddOutlined,
 	PlusOutlined,
 	LoadingOutlined,
+	RobotOutlined,
 } from "@ant-design/icons";
 import { useGoogleLogin } from "@react-oauth/google";
 import GenerationModal from "@/components/GenerationModal";
@@ -230,6 +231,7 @@ export default function NewVideo() {
 					customPrompt: values.customPrompt.trim(),
 				}),
 				...(videoImage && { videoImage }),
+				useSora: Boolean(values.useSora),
 				youtubeAccessToken: userProfile?.youtubeAccessToken || "",
 				youtubeRefreshToken: userProfile?.youtubeRefreshToken || "",
 				youtubeTokenExpiresAt: userProfile?.youtubeTokenExpiresAt || null,
@@ -357,6 +359,7 @@ export default function NewVideo() {
 						startDate: dayjs(),
 						language: "English",
 						country: "all countries",
+						useSora: false,
 					}}
 				>
 					{/* Category */}
@@ -446,6 +449,19 @@ export default function NewVideo() {
 									</Select.Option>
 								))}
 							</Select>
+						</Form.Item>
+						<Form.Item
+							name='useSora'
+							label={
+								<span>
+									<RobotOutlined style={{ marginRight: 6 }} />
+									Use Sora?
+								</span>
+							}
+							valuePropName='checked'
+							tooltip='Toggle Sora text-to-video generation (default: off)'
+						>
+							<Switch />
 						</Form.Item>
 					</Row>
 

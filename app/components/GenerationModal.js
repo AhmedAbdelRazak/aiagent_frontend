@@ -18,6 +18,7 @@ import {
 	LoadingOutlined,
 	CheckCircleOutlined,
 	RocketOutlined,
+	DollarCircleOutlined,
 	MergeCellsOutlined,
 	VideoCameraOutlined,
 	AudioOutlined,
@@ -36,11 +37,16 @@ import {
 const { Step } = Steps;
 const { Text, Paragraph, Link } = Typography;
 
-/* ────────────────────────────────────────────
- * Backend phases – **keep in same order**
- * ──────────────────────────────────────────── */
+/* ---------------------------------------------------------------
+ * Backend phases - keep in the same order as the SSE feed
+ * ------------------------------------------------------------- */
 const PHASE_DEFS = [
 	{ key: "INIT", title: "Starting up", icon: <RocketOutlined /> },
+	{
+		key: "SORA_BUDGET",
+		title: "Planning Sora usage",
+		icon: <DollarCircleOutlined />,
+	},
 	{
 		key: "GENERATING_CLIPS",
 		title: "Generating clips",
@@ -70,36 +76,73 @@ const PHASE_DEFS = [
 const phaseIndex = (p) => PHASE_DEFS.findIndex(({ key }) => key === p);
 
 const STATUS_TEXT = {
-	INIT: "Warming up the engines…",
+	INIT: "Warming up the engines",
+	SORA_BUDGET: "Planning Sora allocation and cost guardrails",
 	GENERATING_CLIPS: "Creating your video scenes",
 	ASSEMBLING_VIDEO: "Stitching scenes together",
-	ADDING_VOICE_MUSIC: "Recording voice‑over & mixing music",
+	ADDING_VOICE_MUSIC: "Recording voice-over and mixing music",
 	SYNCING_VOICE_MUSIC: "Syncing audio with visuals",
 	VIDEO_UPLOADED: "Upload finished!",
 	VIDEO_SCHEDULED: "Video scheduled for publishing",
-	COMPLETED: "All done – enjoy your new video 🎬",
-	ERROR: "Something went wrong 😕",
+	COMPLETED: "All done - enjoy your new video",
+	ERROR: "Something went wrong",
 };
 
 export default function GenerationModal({ open, phase, extra = {}, onClose }) {
-	/* ───────── minimise / restore ───────── */
+	/* minimise / restore */
 	const [minimised, setMinimised] = useState(false);
 	const showModal = open && !minimised;
 
-	/* ───────── track “main” phase (ignore FALLBACK) ───────── */
+	/* track main phase (ignore FALLBACK) */
 	const lastMainPhase = useRef("INIT");
 	useEffect(() => {
-		if (phaseIndex(phase) !== -1 && phase !== "FALLBACK")
+		if (phaseIndex(phase) !== -1 && phase !== "FALLBACK") {
 			lastMainPhase.current = phase;
+		}
 	}, [phase]);
 	const currentPhase = lastMainPhase.current;
 	const currentIdx = phaseIndex(currentPhase);
 
-	/* ───────── segment progress (GENERATING_CLIPS) ───────── */
-	const segDone = Number.isFinite(extra.done) ? extra.done : null;
-	const segTotal = Number.isFinite(extra.total) ? extra.total : null;
+	/* segment progress (GENERATING_CLIPS) */
+	const segDone = Number.isFinite(extra?.done) ? extra.done : null;
+	const segTotal = Number.isFinite(extra?.total) ? extra.total : null;
 
-	/* ───────── accumulate FALLBACK events ───────── */
+	/* sora budget snapshot */
+	const toNumber = (v) => {
+		const n = Number(v);
+		return Number.isFinite(n) ? n : null;
+	};
+	const pickSoraBudget = (payload = {}) => {
+		if (!payload) return null;
+		const usageMode = payload.usageMode || null;
+		const budgetSeconds = toNumber(payload.budgetSeconds);
+		const plannedSeconds = toNumber(payload.soraSecondsPlanned);
+		const costUSD = toNumber(payload.soraCostEstimateUSD);
+
+		if (
+			usageMode ||
+			budgetSeconds !== null ||
+			plannedSeconds !== null ||
+			costUSD !== null
+		) {
+			return { usageMode, budgetSeconds, plannedSeconds, costUSD };
+		}
+		return null;
+	};
+
+	const [soraBudget, setSoraBudget] = useState(null);
+	useEffect(() => {
+		let next = null;
+		if (phase === "SORA_BUDGET") next = pickSoraBudget(extra);
+		if (!next && Array.isArray(extra?.phases)) {
+			const hit = extra.phases.find((p) => p.phase === "SORA_BUDGET");
+			if (hit?.extra) next = pickSoraBudget(hit.extra);
+		}
+		if (next) setSoraBudget(next);
+		if (!open) setSoraBudget(null);
+	}, [phase, extra, open]);
+
+	/* accumulate FALLBACK events */
 	const [fallbacks, setFallbacks] = useState([]);
 	useEffect(() => {
 		if (phase === "FALLBACK" && extra?.segment) {
@@ -111,27 +154,28 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 		if (!open) setFallbacks([]);
 	}, [phase, extra, open]);
 
-	/* ───────── remember if we ever saw VIDEO_SCHEDULED ───────── */
+	/* remember if we ever saw VIDEO_SCHEDULED */
 	const [scheduleSeen, setScheduleSeen] = useState(false);
 	useEffect(() => {
 		if (phase === "VIDEO_SCHEDULED") setScheduleSeen(true);
 		if (!open) setScheduleSeen(false);
 	}, [phase, open]);
 
-	/* ───────── remember YouTube link once it appears ───────── */
+	/* remember YouTube link once it appears */
 	const youtubeLinkRef = useRef(null);
 	useEffect(() => {
 		if (extra.youtubeLink) youtubeLinkRef.current = extra.youtubeLink;
 		if (phase === "COMPLETED" && !youtubeLinkRef.current && extra?.phases) {
 			const hit = extra.phases.find((p) => p.extra?.youtubeLink);
-			if (hit) youtubeLinkRef.current = hit.extra.youtubeLink;
+			if (hit?.extra?.youtubeLink)
+				youtubeLinkRef.current = hit.extra.youtubeLink;
 		}
 		if (!open) youtubeLinkRef.current = null;
 	}, [phase, extra, open]);
 
-	/* ───────── banner (plain English status) ───────── */
+	/* banner (plain English status) */
 	const Banner = () => {
-		const txt = STATUS_TEXT[currentPhase] || "Working…";
+		const txt = STATUS_TEXT[currentPhase] || "Working";
 		const Ico =
 			currentPhase === "ERROR"
 				? ExclamationCircleOutlined
@@ -162,7 +206,35 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 		);
 	};
 
-	/* ───────── main vertical steps ───────── */
+	/* sora budget block */
+	const SoraBudgetBlock = () =>
+		soraBudget ? (
+			<Alert
+				type='info'
+				showIcon
+				icon={<DollarCircleOutlined />}
+				message='Sora plan'
+				description={
+					<Space size={[8, 8]} wrap>
+						{soraBudget.usageMode && (
+							<Tag color='blue'>Mode: {soraBudget.usageMode}</Tag>
+						)}
+						{Number.isFinite(soraBudget.budgetSeconds) && (
+							<Tag color='gold'>Budget: {soraBudget.budgetSeconds}s</Tag>
+						)}
+						{Number.isFinite(soraBudget.plannedSeconds) && (
+							<Tag color='geekblue'>Planned: {soraBudget.plannedSeconds}s</Tag>
+						)}
+						{Number.isFinite(soraBudget.costUSD) && (
+							<Tag color='green'>Est: ${soraBudget.costUSD.toFixed(2)}</Tag>
+						)}
+					</Space>
+				}
+				style={{ marginBottom: 12 }}
+			/>
+		) : null;
+
+	/* main vertical steps */
 	const MainSteps = () => (
 		<Steps direction='vertical' current={currentIdx}>
 			{PHASE_DEFS.map(({ key, title, icon }, idx) => {
@@ -213,9 +285,22 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 		</Steps>
 	);
 
-	/* ───────── segment mini‑stepper ───────── */
-	const SegmentSteps = () =>
-		segTotal && segDone ? (
+	/* segment mini-stepper */
+	const SegmentSteps = () => {
+		const total = Number.isFinite(segTotal) ? segTotal : null;
+		const done = Number.isFinite(segDone) ? segDone : null;
+		const hasProgress = total !== null && total > 0 && done !== null;
+		if (!hasProgress) return null;
+
+		const totalInt = Math.max(1, Math.round(total));
+		const safeDone = Math.max(0, Math.min(done, totalInt));
+		const active = Math.min(
+			totalInt,
+			safeDone + (safeDone >= totalInt ? 0 : 1)
+		);
+		const currentStepIdx = Math.max(0, active - 1);
+
+		return (
 			<>
 				<Row style={{ marginTop: 24 }}>
 					<Col span={24}>
@@ -224,14 +309,14 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 				</Row>
 				<Steps
 					size='small'
-					current={segDone - 1}
+					current={currentStepIdx}
 					progressDot
 					responsive={false}
 				>
-					{Array.from({ length: segTotal }, (_, i) => {
+					{Array.from({ length: totalInt }, (_, i) => {
 						const n = i + 1;
 						const st =
-							n < segDone ? "finish" : n === segDone ? "process" : "wait";
+							n <= safeDone ? "finish" : n === active ? "process" : "wait";
 						const ic =
 							st === "finish" ? (
 								<CheckCircleOutlined style={{ color: "#1890ff" }} />
@@ -245,19 +330,20 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 				</Steps>
 				<Progress
 					style={{ marginTop: 8 }}
-					percent={Math.round((segDone / segTotal) * 100)}
+					percent={Math.min(100, Math.round((safeDone / totalInt) * 100))}
 					size='small'
 				/>
 			</>
-		) : null;
+		);
+	};
 
-	/* ───────── fallback alerts ───────── */
+	/* fallback alerts */
 	const FallbackAlerts = () =>
 		fallbacks.length ? (
 			<>
 				<Row style={{ marginTop: 24 }}>
 					<Col span={24}>
-						<Text strong>Auto‑recovery events</Text>
+						<Text strong>Auto-recovery events</Text>
 					</Col>
 				</Row>
 				{fallbacks.map(({ segment, type, reason }, i) => (
@@ -268,7 +354,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 						message={
 							<>
 								<Tag color='orange'>Segment {segment}</Tag>
-								{reason || `Fallback (${type})`}
+								{reason || `Fallback (${type})`}
 							</>
 						}
 						style={{ marginTop: 8 }}
@@ -277,7 +363,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 			</>
 		) : null;
 
-	/* ───────── YouTube link block ───────── */
+	/* YouTube link block */
 	const YoutubeBlock = () =>
 		youtubeLinkRef.current ? (
 			<div style={{ marginTop: 32, textAlign: "center" }}>
@@ -286,7 +372,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 				</Paragraph>
 				<Paragraph>
 					<Text strong style={{ fontSize: 18 }}>
-						Your video is live on YouTube
+						Your video is live on YouTube
 					</Text>
 				</Paragraph>
 				<Paragraph copyable={{ text: youtubeLinkRef.current }}>
@@ -301,7 +387,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 			</div>
 		) : null;
 
-	/* ───────── error message ───────── */
+	/* error message */
 	const ErrorBlock = () =>
 		currentPhase === "ERROR" ? (
 			<Alert
@@ -311,7 +397,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 				message='Generation failed'
 				description={
 					<>
-						We couldn’t finish this video. Please try again or&nbsp;
+						We could not finish this video. Please try again or&nbsp;
 						<Link href='/contact'>contact support</Link>.
 					</>
 				}
@@ -320,7 +406,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 
 	const isTerminal = currentPhase === "COMPLETED" || currentPhase === "ERROR";
 
-	/* ───────── header with minimise button (AntD ≥ 5.8) ───────── */
+	/* header with minimise button (AntD >= 5.8) */
 	const Header = (
 		<div
 			style={{
@@ -329,7 +415,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 				alignItems: "center",
 			}}
 		>
-			<span>Video generation progress (≈ 5‑7 min)</span>
+			<span>Video generation progress (about 5-7 min)</span>
 			<Button
 				type='text'
 				size='small'
@@ -358,6 +444,7 @@ export default function GenerationModal({ open, phase, extra = {}, onClose }) {
 				)}
 			>
 				<Banner />
+				<SoraBudgetBlock />
 				<MainSteps />
 				<SegmentSteps />
 				<FallbackAlerts />
