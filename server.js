@@ -14,7 +14,7 @@ app.prepare().then(() => {
 	server.use(compression());
 
 	// Let Next.js handle everything (pages, assets, API routes)
-	server.all("/*", (req, res) => {
+	server.all("*", (req, res) => {
 		const parsedUrl = parse(req.url, true);
 		return handle(req, res, parsedUrl);
 	});
