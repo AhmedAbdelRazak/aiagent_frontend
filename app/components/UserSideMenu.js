@@ -10,6 +10,7 @@ import {
 	FaVideo,
 	FaUsers,
 	FaKey,
+	FaFilm,
 } from "react-icons/fa";
 import { MdSubscriptions } from "react-icons/md";
 
@@ -76,6 +77,11 @@ export default function AdminSideMenu() {
 			href: "/dashboard/new-video",
 			label: "New Video",
 			icon: <FaPlusCircle />,
+		},
+		{
+			href: "/dashboard/long-video",
+			label: "Long Video",
+			icon: <FaFilm />,
 		},
 		{ href: "/dashboard/all-videos", label: "All Videos", icon: <FaVideo /> },
 		{
