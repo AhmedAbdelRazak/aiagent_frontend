@@ -1,4 +1,4 @@
-/* app/dashboard/long-video/page.js */
+/* app/admin/long-video/page.js */
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -34,7 +34,7 @@ const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL;
 
 const DURATION_OPTIONS = [20, 45, 60, 120, 180, 240, 300];
 
-export default function LongVideoPage() {
+export default function AdminLongVideoPage() {
 	const [loading, setLoading] = useState(false);
 	const [polling, setPolling] = useState(false);
 	const [jobId, setJobId] = useState(null);
@@ -148,7 +148,7 @@ export default function LongVideoPage() {
 
 	return (
 		<>
-			<SeoHead title='Dashboard | Long Video' />
+			<SeoHead title='Admin | Long Video' />
 			<h2>Create Long Video</h2>
 
 			<Card style={{ marginBottom: "1rem" }}>
