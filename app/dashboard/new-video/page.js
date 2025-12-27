@@ -19,6 +19,7 @@ import {
 import dayjs from "dayjs";
 import axios from "@/utils/api";
 import SeoHead from "@/components/SeoHead";
+import { getApiBase } from "@/utils/apiBase";
 import styled from "styled-components";
 import {
 	DisconnectOutlined,
@@ -48,7 +49,7 @@ const Row = styled.div`
 	flex-wrap: wrap;
 `;
 
-const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE = getApiBase();
 
 /* helper: file → base64 */
 const fileToBase64 = (file) =>
@@ -249,8 +250,12 @@ export default function NewVideo() {
 
 			const token = localStorage.getItem("token");
 			if (!token) throw new Error("No auth token, please log in again.");
+			if (!API_BASE)
+				throw new Error(
+					"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
+				);
 
-			const res = await fetch(`${API_ORIGIN}/videos`, {
+			const res = await fetch(`${API_BASE}/videos`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",

@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from "react";
 import io from "socket.io-client";
+import { getSocketBase } from "@/utils/apiBase";
 
 export default function useWebSocket() {
 	const [socket, setSocket] = useState(null);
 
 	useEffect(() => {
-		const s = io(`${process.env.NEXT_PUBLIC_API_URL.replace("/api", "")}`, {
+		const socketBase = getSocketBase();
+		if (!socketBase) {
+			console.warn("Missing NEXT_PUBLIC_API_URL; websocket disabled.");
+			return () => {};
+		}
+		const s = io(socketBase, {
 			transports: ["websocket"],
 		});
 		setSocket(s);

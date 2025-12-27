@@ -1,9 +1,10 @@
 // app/utils/api.js
 import axios from "axios";
 import Cookies from "js-cookie";
+import { getApiBase } from "./apiBase";
 
 const axiosClient = axios.create({
-	baseURL: process.env.NEXT_PUBLIC_API_URL,
+	baseURL: getApiBase(),
 	headers: {
 		"Content-Type": "application/json",
 	},

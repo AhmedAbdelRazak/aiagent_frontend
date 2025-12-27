@@ -17,6 +17,7 @@ import {
 } from "antd";
 import dayjs from "dayjs";
 import SeoHead from "@/components/SeoHead";
+import { getApiBase } from "@/utils/apiBase";
 import {
 	VideoCameraAddOutlined,
 	ClockCircleOutlined,
@@ -30,7 +31,7 @@ import {
 
 const { Text } = Typography;
 const { TextArea } = Input;
-const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE = getApiBase();
 
 const DURATION_OPTIONS = [20, 45, 60, 120, 180, 240, 300];
 
@@ -58,12 +59,18 @@ export default function LongVideoPage() {
 
 	const startPolling = (id) => {
 		stopPolling();
+		if (!API_BASE) {
+			message.error(
+				"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
+			);
+			return;
+		}
 		setPolling(true);
 		pollRef.current = setInterval(async () => {
 			try {
 				const token = localStorage.getItem("token");
 				if (!token) throw new Error("No auth token, please log in again.");
-				const res = await fetch(`${API_ORIGIN}/long-video/${id}`, {
+				const res = await fetch(`${API_BASE}/long-video/${id}`, {
 					headers: {
 						Authorization: `Bearer ${token}`,
 						"Cache-Control": "no-cache",
@@ -99,6 +106,10 @@ export default function LongVideoPage() {
 		try {
 			const token = localStorage.getItem("token");
 			if (!token) throw new Error("No auth token, please log in again.");
+			if (!API_BASE)
+				throw new Error(
+					"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
+				);
 
 			const payload = {
 				preferredTopicHint: values.titlePrompt?.trim() || "",
@@ -121,7 +132,7 @@ export default function LongVideoPage() {
 				};
 			}
 
-			const res = await fetch(`${API_ORIGIN}/long-video`, {
+			const res = await fetch(`${API_BASE}/long-video`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",

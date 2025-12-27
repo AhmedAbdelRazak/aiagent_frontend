@@ -1,7 +1,7 @@
 /* app/admin/long-video/page.js */
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	Form,
 	Input,
@@ -14,9 +14,14 @@ import {
 	TimePicker,
 	Progress,
 	Typography,
+	Divider,
+	Space,
+	Tag,
+	Collapse,
 } from "antd";
 import dayjs from "dayjs";
 import SeoHead from "@/components/SeoHead";
+import { getApiBase } from "@/utils/apiBase";
 import {
 	VideoCameraAddOutlined,
 	ClockCircleOutlined,
@@ -24,26 +29,45 @@ import {
 	FieldTimeOutlined,
 	BulbOutlined,
 	GlobalOutlined,
-	SoundOutlined,
-	FileImageOutlined,
+	AppstoreOutlined,
 } from "@ant-design/icons";
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 const { TextArea } = Input;
-const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL;
+const { Panel } = Collapse;
 
-const DURATION_OPTIONS = [20, 45, 60, 120, 180, 240, 300];
+const API_BASE = getApiBase();
+
+const DURATION_OPTIONS = [20, 45, 60, 90, 120, 180, 240, 300];
+const JOB_ID_STORAGE_KEY = "longVideoJobId";
+
+const PROGRESS_STAGES = [
+	{ min: 1, label: "Queued and initializing" },
+	{ min: 12, label: "Presenter + context prep" },
+	{ min: 18, label: "Script + SEO plan" },
+	{ min: 40, label: "Audio timing + visual plan" },
+	{ min: 50, label: "Rendering segments" },
+	{ min: 72, label: "Concatenating segments" },
+	{ min: 84, label: "Finalizing visuals" },
+	{ min: 92, label: "Mixing music" },
+	{ min: 96, label: "Final export" },
+];
 
 export default function AdminLongVideoPage() {
+	const [form] = Form.useForm();
+
 	const [loading, setLoading] = useState(false);
 	const [polling, setPolling] = useState(false);
 	const [jobId, setJobId] = useState(null);
+
 	const [status, setStatus] = useState(null);
 	const [progress, setProgress] = useState(0);
 	const [topic, setTopic] = useState("");
 	const [finalUrl, setFinalUrl] = useState("");
 	const [error, setError] = useState("");
+	const [meta, setMeta] = useState({});
 	const [schedEnabled, setSchedEnabled] = useState(false);
+
 	const pollRef = useRef(null);
 
 	const stopPolling = () => {
@@ -52,31 +76,125 @@ export default function AdminLongVideoPage() {
 		setPolling(false);
 	};
 
+	const deriveProgressFromMeta = (nextStatus, nextMeta) => {
+		const statusLabel = String(nextStatus || "").toLowerCase();
+		if (statusLabel === "completed") return 100;
+		if (statusLabel === "queued") return 1;
+		if (!nextMeta) return 0;
+		if (nextMeta.finalVideoUrl) return 100;
+		if (nextMeta.timeline) return 40;
+		if (nextMeta.script?.segments?.length) return 18;
+		if (nextMeta.title) return 18;
+		if (Array.isArray(nextMeta.topics) && nextMeta.topics.length) return 8;
+		return 0;
+	};
+
+	const normalizeProgress = (nextStatus, nextPct, nextFinalUrl) => {
+		const parsed = Number.parseFloat(nextPct);
+		const base = Number.isFinite(parsed) ? parsed : 0;
+		if (nextFinalUrl) return 100;
+		const statusLabel = String(nextStatus || "").toLowerCase();
+		if (statusLabel === "completed") return 100;
+		return Math.max(0, Math.min(100, base));
+	};
+
+	const resolveStepLabel = (nextStatus, nextProgress, nextMeta, nextFinalUrl) => {
+		const statusLabel = String(nextStatus || "").toLowerCase();
+		if (nextFinalUrl || statusLabel === "completed") return "Completed";
+		if (statusLabel === "failed") return "Failed";
+		if (statusLabel === "queued") return "Queued";
+
+		const pct = Number.isFinite(Number(nextProgress))
+			? Number(nextProgress)
+			: 0;
+		let label = "Running";
+		for (const stage of PROGRESS_STAGES) {
+			if (pct >= stage.min) label = stage.label;
+		}
+
+		if (nextMeta?.visualPlan) {
+			const presenterCount = Array.isArray(nextMeta.visualPlan.presenterSegments)
+				? nextMeta.visualPlan.presenterSegments.length
+				: 0;
+			const imageCount = Array.isArray(nextMeta.visualPlan.imageSegments)
+				? nextMeta.visualPlan.imageSegments.length
+				: 0;
+			if (presenterCount || imageCount) {
+				return `${label} (Presenter ${presenterCount} / Images ${imageCount})`;
+			}
+		}
+
+		return label;
+	};
+
 	useEffect(() => {
 		return () => stopPolling();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	useEffect(() => {
+		const storedJobId = localStorage.getItem(JOB_ID_STORAGE_KEY);
+		if (storedJobId) {
+			setJobId(storedJobId);
+			startPolling(storedJobId);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const startPolling = (id) => {
 		stopPolling();
-		setPolling(true);
-		pollRef.current = setInterval(async () => {
+
+		if (!API_BASE) {
+			message.error(
+				"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
+			);
+			return;
+		}
+
+		const pollOnce = async () => {
 			try {
 				const token = localStorage.getItem("token");
 				if (!token) throw new Error("No auth token, please log in again.");
-				const res = await fetch(`${API_ORIGIN}/long-video/${id}`, {
+
+				const res = await fetch(`${API_BASE}/long-video/${id}`, {
 					headers: {
 						Authorization: `Bearer ${token}`,
 						"Cache-Control": "no-cache",
 					},
 					cache: "no-store",
 				});
+
 				if (!res.ok) throw new Error("Failed to fetch job status.");
 				const data = await res.json();
+
+				const rawPct =
+					data.progressPct ??
+					data.progress ??
+					data.meta?.progressPct ??
+					data.meta?.progress;
+				const fallbackPct = deriveProgressFromMeta(data.status, data.meta);
+				const parsedPct = Number.parseFloat(rawPct);
+				const hasParsed = Number.isFinite(parsedPct);
+				const useFallback =
+					!hasParsed || (parsedPct <= 0 && fallbackPct > 0);
+				const nextProgress = normalizeProgress(
+					data.status,
+					useFallback ? fallbackPct : parsedPct,
+					data.finalVideoUrl
+				);
+				const nextStep = resolveStepLabel(
+					data.status,
+					nextProgress,
+					data.meta,
+					data.finalVideoUrl
+				);
 				setStatus(data.status);
-				setProgress(data.progressPct || 0);
+				setProgress(nextProgress);
 				setTopic(data.topic || "");
 				setFinalUrl(data.finalVideoUrl || "");
 				setError(data.error || "");
+				setMeta({ ...(data.meta || {}), currentStep: nextStep });
+
 				if (data.status === "completed" || data.status === "failed") {
 					stopPolling();
 				}
@@ -84,7 +202,20 @@ export default function AdminLongVideoPage() {
 				stopPolling();
 				message.error(err.message || "Polling failed");
 			}
-		}, 3000);
+		};
+
+		setPolling(true);
+		pollRef.current = setInterval(pollOnce, 3000);
+		pollOnce();
+	};
+
+	const statusTag = () => {
+		if (!status || status === "idle") return <Tag>idle</Tag>;
+		if (status === "queued") return <Tag color='blue'>queued</Tag>;
+		if (status === "running") return <Tag color='gold'>running</Tag>;
+		if (status === "completed") return <Tag color='green'>completed</Tag>;
+		if (status === "failed") return <Tag color='red'>failed</Tag>;
+		return <Tag>{status}</Tag>;
 	};
 
 	const onFinish = async (values) => {
@@ -95,19 +226,21 @@ export default function AdminLongVideoPage() {
 		setError("");
 		setJobId(null);
 		setTopic("");
+		setMeta({});
 
 		try {
 			const token = localStorage.getItem("token");
 			if (!token) throw new Error("No auth token, please log in again.");
+			if (!API_BASE)
+				throw new Error(
+					"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
+				);
 
 			const payload = {
 				preferredTopicHint: values.titlePrompt?.trim() || "",
+				category: values.category || "Entertainment",
 				language: values.language || "en",
 				targetDurationSec: Number(values.duration),
-				presenterImageUrl: values.presenterImageUrl?.trim() || "",
-				voiceoverUrl: values.voiceoverUrl?.trim() || "",
-				musicUrl: values.musicUrl?.trim() || "",
-				dryRun: Boolean(values.dryRun),
 			};
 
 			if (schedEnabled) {
@@ -121,7 +254,7 @@ export default function AdminLongVideoPage() {
 				};
 			}
 
-			const res = await fetch(`${API_ORIGIN}/long-video`, {
+			const res = await fetch(`${API_BASE}/long-video`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -129,6 +262,7 @@ export default function AdminLongVideoPage() {
 				},
 				body: JSON.stringify(payload),
 			});
+
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
 				throw new Error(err.error || "Failed to start long video job.");
@@ -137,7 +271,9 @@ export default function AdminLongVideoPage() {
 			const data = await res.json();
 			setJobId(data.jobId);
 			setStatus(data.status);
+			localStorage.setItem(JOB_ID_STORAGE_KEY, data.jobId);
 			startPolling(data.jobId);
+
 			message.success("Long video job queued.");
 		} catch (err) {
 			message.error(err.message || "Failed to start long video job.");
@@ -146,117 +282,134 @@ export default function AdminLongVideoPage() {
 		}
 	};
 
+	const scriptSegments = Array.isArray(meta?.script?.segments)
+		? meta.script.segments
+		: [];
+	const displayProgress = normalizeProgress(status, progress, finalUrl);
+	const stepLabel = resolveStepLabel(status, displayProgress, meta, finalUrl);
+
 	return (
 		<>
 			<SeoHead title='Admin | Long Video' />
-			<h2>Create Long Video</h2>
+
+			<Title level={3} style={{ marginBottom: 12 }}>
+				Create Long Video
+			</Title>
 
 			<Card style={{ marginBottom: "1rem" }}>
 				<Form
+					form={form}
 					layout='vertical'
 					onFinish={onFinish}
 					initialValues={{
+						category: "Entertainment",
 						language: "en",
-						duration: 180,
+						duration: 60,
 						startDate: dayjs(),
+						scheduleType: "daily",
+						time: dayjs().hour(14).minute(0),
 					}}
 				>
+					<Divider orientation='left'>Content</Divider>
+
 					<Form.Item
 						name='titlePrompt'
 						label={
 							<span>
 								<BulbOutlined style={{ marginRight: 6 }} />
-								Title Prompt (optional)
+								Topic Hint (optional)
 							</span>
 						}
-						tooltip='If empty, the orchestrator will pick a trending movie topic.'
+						tooltip='If empty, the orchestrator will pick a trending topic.'
 					>
 						<TextArea
 							rows={2}
-							placeholder='Example: The top reasons people are talking about Dune 2'
+							placeholder="Example: Avatar: Fire and Ash - what's new, who's new, and why this sequel might be the turning point"
 						/>
 					</Form.Item>
 
 					<Form.Item
-						name='duration'
+						name='category'
 						label={
 							<span>
-								<ClockCircleOutlined style={{ marginRight: 6 }} />
-								Duration (seconds)
+								<AppstoreOutlined style={{ marginRight: 6 }} />
+								Category
 							</span>
 						}
-						rules={[{ required: true, message: "Select duration" }]}
+						rules={[{ required: true, message: "Please select a category" }]}
 					>
-						<Select style={{ width: 200 }}>
-							{DURATION_OPTIONS.map((sec) => (
-								<Select.Option key={sec} value={sec}>
-									{sec} seconds
-								</Select.Option>
-							))}
+						<Select placeholder='Select category'>
+							<Select.Option value='Other'>
+								Most Trending (All Topics)
+							</Select.Option>
+							<Select.Option value='Sports'>Sports</Select.Option>
+							<Select.Option value='Politics'>Politics</Select.Option>
+							<Select.Option value='Finance'>Finance</Select.Option>
+							<Select.Option value='Entertainment'>Entertainment</Select.Option>
+							<Select.Option value='Technology'>Technology</Select.Option>
+							<Select.Option value='Health'>Health</Select.Option>
+							<Select.Option value='World'>World</Select.Option>
+							<Select.Option value='Lifestyle'>Lifestyle</Select.Option>
+							<Select.Option value='Science'>Science</Select.Option>
+							<Select.Option value='Gaming'>Gaming</Select.Option>
+							<Select.Option value='Business'>Business</Select.Option>
+							<Select.Option value='Travel'>Travel</Select.Option>
+							<Select.Option value='FoodDrink'>Food & Drink</Select.Option>
+							<Select.Option value='PetsAndAnimals'>
+								Pets and Animals
+							</Select.Option>
+							<Select.Option value='CelebrityNews'>
+								Celebrity News
+							</Select.Option>
+							<Select.Option value='Climate'>Climate</Select.Option>
+							<Select.Option value='SocialIssues'>Social Issues</Select.Option>
+							<Select.Option value='Education'>Education</Select.Option>
+							<Select.Option value='Fashion'>Fashion</Select.Option>
+							<Select.Option value='Top5'>Top 5</Select.Option>
 						</Select>
 					</Form.Item>
 
-					<Form.Item
-						name='language'
-						label={
-							<span>
-								<GlobalOutlined style={{ marginRight: 6 }} />
-								Language
-							</span>
-						}
-					>
-						<Select style={{ width: 200 }}>
-							<Select.Option value='en'>English</Select.Option>
-							<Select.Option value='es'>Spanish</Select.Option>
-							<Select.Option value='fr'>French</Select.Option>
-							<Select.Option value='de'>German</Select.Option>
-							<Select.Option value='ar'>Arabic</Select.Option>
-						</Select>
-					</Form.Item>
+					<Space size='large' wrap>
+						<Form.Item
+							name='duration'
+							label={
+								<span>
+									<ClockCircleOutlined style={{ marginRight: 6 }} />
+									Content Duration (seconds)
+								</span>
+							}
+							tooltip='Intro/outro are added automatically by the backend.'
+							rules={[{ required: true, message: "Select duration" }]}
+						>
+							<Select style={{ width: 220 }}>
+								{DURATION_OPTIONS.map((sec) => (
+									<Select.Option key={sec} value={sec}>
+										{sec} seconds
+									</Select.Option>
+								))}
+							</Select>
+						</Form.Item>
 
-					<Form.Item
-						name='presenterImageUrl'
-						label={
-							<span>
-								<FileImageOutlined style={{ marginRight: 6 }} />
-								Presenter Image URL (optional)
-							</span>
-						}
-					>
-						<Input placeholder='https://example.com/your-photo.png' />
-					</Form.Item>
+						<Form.Item
+							name='language'
+							label={
+								<span>
+									<GlobalOutlined style={{ marginRight: 6 }} />
+									Language
+								</span>
+							}
+						>
+							<Select style={{ width: 220 }}>
+								<Select.Option value='en'>English</Select.Option>
+								<Select.Option value='es'>Spanish</Select.Option>
+								<Select.Option value='fr'>French</Select.Option>
+								<Select.Option value='de'>German</Select.Option>
+								<Select.Option value='ar'>Arabic</Select.Option>
+							</Select>
+						</Form.Item>
+					</Space>
 
-					<Form.Item
-						name='voiceoverUrl'
-						label={
-							<span>
-								<SoundOutlined style={{ marginRight: 6 }} />
-								Voiceover URL (optional)
-							</span>
-						}
-					>
-						<Input placeholder='https://example.com/voiceover.mp3' />
-					</Form.Item>
-
-					<Form.Item
-						name='musicUrl'
-						label={
-							<span>
-								<SoundOutlined style={{ marginRight: 6 }} />
-								Background Music URL (optional)
-							</span>
-						}
-					>
-						<Input placeholder='https://example.com/music.mp3' />
-					</Form.Item>
-
-					<Form.Item
-						name='dryRun'
-						label='Dry Run (no external calls)'
-						valuePropName='checked'
-					>
-						<Switch />
-					</Form.Item>
+					<Divider orientation='left'>Scheduling</Divider>
 
 					<Form.Item
 						label={
@@ -284,6 +437,7 @@ export default function AdminLongVideoPage() {
 							>
 								<DatePicker />
 							</Form.Item>
+
 							<Form.Item
 								name='endDate'
 								label={
@@ -295,6 +449,7 @@ export default function AdminLongVideoPage() {
 							>
 								<DatePicker />
 							</Form.Item>
+
 							<Form.Item
 								name='scheduleType'
 								label={
@@ -303,7 +458,6 @@ export default function AdminLongVideoPage() {
 										Frequency
 									</span>
 								}
-								initialValue='daily'
 								rules={[{ required: true, message: "Select a frequency" }]}
 							>
 								<Select style={{ width: 200 }}>
@@ -312,6 +466,7 @@ export default function AdminLongVideoPage() {
 									<Select.Option value='monthly'>Monthly</Select.Option>
 								</Select>
 							</Form.Item>
+
 							<Form.Item
 								name='time'
 								label={
@@ -320,7 +475,6 @@ export default function AdminLongVideoPage() {
 										Time of Day
 									</span>
 								}
-								initialValue={dayjs().hour(14).minute(0)}
 								rules={[{ required: true, message: "Pick a time" }]}
 							>
 								<TimePicker format='HH:mm' />
@@ -340,33 +494,115 @@ export default function AdminLongVideoPage() {
 			</Card>
 
 			<Card>
-				<Text strong>Status:</Text> {status || "idle"}
-				<br />
-				<Text strong>Progress:</Text>
-				<Progress percent={progress} status={status === "failed" ? "exception" : "active"} />
-				{topic && (
-					<>
-						<Text strong>Topic:</Text> {topic}
-						<br />
-					</>
-				)}
-				{finalUrl && (
-					<>
-						<Text strong>Final Video:</Text>{" "}
-						<a href={finalUrl} target='_blank' rel='noreferrer'>
-							Download MP4
-						</a>
-						<br />
-					</>
-				)}
-				{error && (
-					<Text type='danger'>
-						Error: {error}
-					</Text>
-				)}
-				{polling && !finalUrl && !error && (
-					<Text type='secondary'>Job is running... polling every 3s.</Text>
-				)}
+				<Space direction='vertical' style={{ width: "100%" }}>
+					<div>
+						<Text strong>Status:</Text> {statusTag()}
+						{jobId && (
+							<Text type='secondary' style={{ marginLeft: 10 }}>
+								jobId: {jobId}
+							</Text>
+						)}
+					</div>
+
+					<div>
+						<Text strong>Progress:</Text>
+						<Progress
+							percent={displayProgress}
+							status={
+								status === "failed"
+									? "exception"
+									: status === "completed"
+										? "success"
+										: "active"
+							}
+						/>
+					</div>
+
+					<div>
+						<Text strong>Pipeline:</Text> {stepLabel}
+					</div>
+
+					{topic && (
+						<div>
+							<Text strong>Topic:</Text> {topic}
+						</div>
+					)}
+
+					{meta?.title && (
+						<div>
+							<Text strong>Video Title:</Text> {meta.title}
+						</div>
+					)}
+
+					{meta?.topicReason && (
+						<div>
+							<Text strong>Topic Reason:</Text> {meta.topicReason}
+						</div>
+					)}
+
+					{meta?.topicAngle && (
+						<div>
+							<Text strong>Topic Angle:</Text> {meta.topicAngle}
+						</div>
+					)}
+
+					{scriptSegments.length > 0 && (
+						<Collapse>
+							<Panel
+								header={`Script (${scriptSegments.length} segments)`}
+								key='script'
+							>
+								<div style={{ whiteSpace: "pre-wrap" }}>
+									{scriptSegments
+										.map((s) => {
+											const start =
+												typeof s.startSec === "number"
+													? s.startSec.toFixed(2)
+													: "?";
+											const end =
+												typeof s.endSec === "number"
+													? s.endSec.toFixed(2)
+													: "?";
+											return `[${start}s - ${end}s] ${s.text || ""}`;
+										})
+										.join("\n\n")}
+								</div>
+							</Panel>
+							<Panel header='Raw Meta (debug)' key='meta'>
+								<pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>
+									{JSON.stringify(meta || {}, null, 2)}
+								</pre>
+							</Panel>
+						</Collapse>
+					)}
+
+					{finalUrl && (
+						<>
+							<div>
+								<Text strong>Final Video:</Text>{" "}
+								<a href={finalUrl} target='_blank' rel='noreferrer'>
+									Download MP4
+								</a>
+							</div>
+
+							<video
+								src={finalUrl}
+								controls
+								style={{ width: "100%", maxHeight: 520, borderRadius: 10 }}
+							/>
+						</>
+					)}
+
+					{error && (
+						<Text type='danger' style={{ whiteSpace: "pre-wrap" }}>
+							Error: {error}
+						</Text>
+					)}
+
+					{polling && !finalUrl && !error && (
+						<Text type='secondary'>Job is running... polling every 3s.</Text>
+					)}
+				</Space>
 			</Card>
 		</>
 	);
