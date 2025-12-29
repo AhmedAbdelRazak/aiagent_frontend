@@ -91,7 +91,7 @@ export default function LongVideoPage() {
 				stopPolling();
 				message.error(err.message || "Polling failed");
 			}
-		}, 3000);
+		}, 20000);
 	};
 
 	const onFinish = async (values) => {
@@ -354,7 +354,10 @@ export default function LongVideoPage() {
 				<Text strong>Status:</Text> {status || "idle"}
 				<br />
 				<Text strong>Progress:</Text>
-				<Progress percent={progress} status={status === "failed" ? "exception" : "active"} />
+				<Progress
+					percent={progress}
+					status={status === "failed" ? "exception" : "active"}
+				/>
 				{topic && (
 					<>
 						<Text strong>Topic:</Text> {topic}
@@ -370,13 +373,9 @@ export default function LongVideoPage() {
 						<br />
 					</>
 				)}
-				{error && (
-					<Text type='danger'>
-						Error: {error}
-					</Text>
-				)}
+				{error && <Text type='danger'>Error: {error}</Text>}
 				{polling && !finalUrl && !error && (
-					<Text type='secondary'>Job is running... polling every 3s.</Text>
+					<Text type='secondary'>Job is running... polling every 20s.</Text>
 				)}
 			</Card>
 		</>

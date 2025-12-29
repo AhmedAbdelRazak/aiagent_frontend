@@ -98,7 +98,12 @@ export default function AdminLongVideoPage() {
 		return Math.max(0, Math.min(100, base));
 	};
 
-	const resolveStepLabel = (nextStatus, nextProgress, nextMeta, nextFinalUrl) => {
+	const resolveStepLabel = (
+		nextStatus,
+		nextProgress,
+		nextMeta,
+		nextFinalUrl
+	) => {
 		const statusLabel = String(nextStatus || "").toLowerCase();
 		if (nextFinalUrl || statusLabel === "completed") return "Completed";
 		if (statusLabel === "failed") return "Failed";
@@ -113,7 +118,9 @@ export default function AdminLongVideoPage() {
 		}
 
 		if (nextMeta?.visualPlan) {
-			const presenterCount = Array.isArray(nextMeta.visualPlan.presenterSegments)
+			const presenterCount = Array.isArray(
+				nextMeta.visualPlan.presenterSegments
+			)
 				? nextMeta.visualPlan.presenterSegments.length
 				: 0;
 			const imageCount = Array.isArray(nextMeta.visualPlan.imageSegments)
@@ -175,8 +182,7 @@ export default function AdminLongVideoPage() {
 				const fallbackPct = deriveProgressFromMeta(data.status, data.meta);
 				const parsedPct = Number.parseFloat(rawPct);
 				const hasParsed = Number.isFinite(parsedPct);
-				const useFallback =
-					!hasParsed || (parsedPct <= 0 && fallbackPct > 0);
+				const useFallback = !hasParsed || (parsedPct <= 0 && fallbackPct > 0);
 				const nextProgress = normalizeProgress(
 					data.status,
 					useFallback ? fallbackPct : parsedPct,
@@ -205,7 +211,7 @@ export default function AdminLongVideoPage() {
 		};
 
 		setPolling(true);
-		pollRef.current = setInterval(pollOnce, 3000);
+		pollRef.current = setInterval(pollOnce, 20000);
 		pollOnce();
 	};
 
@@ -600,7 +606,7 @@ export default function AdminLongVideoPage() {
 					)}
 
 					{polling && !finalUrl && !error && (
-						<Text type='secondary'>Job is running... polling every 3s.</Text>
+						<Text type='secondary'>Job is running... polling every 20s.</Text>
 					)}
 				</Space>
 			</Card>
