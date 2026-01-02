@@ -38,7 +38,7 @@ const { Panel } = Collapse;
 
 const API_BASE = getApiBase();
 
-const DURATION_OPTIONS = [20, 45, 60, 90, 120, 180, 240, 300];
+const DURATION_OPTIONS = [20, 45, 60, 90, 120, 180, 240, 300, 360];
 const JOB_ID_STORAGE_KEY = "longVideoJobId";
 
 const PROGRESS_STAGES = [
