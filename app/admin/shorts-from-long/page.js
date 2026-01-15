@@ -36,9 +36,7 @@ export default function ShortsFromLongAdmin() {
 	const fetchLongVideos = async () => {
 		setLoadingVideos(true);
 		try {
-			const { data } = await axios.get(
-				`/videos?isLongVideo=true&limit=50&page=1`
-			);
+			const { data } = await axios.get(`/long-video/shorts-eligible`);
 			if (!data?.success) throw new Error("Failed to load videos.");
 			setVideos(Array.isArray(data.data) ? data.data : []);
 		} catch (err) {
