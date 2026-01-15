@@ -11,6 +11,7 @@ import {
 	FaUsers,
 	FaKey,
 	FaFilm,
+	FaCut,
 } from "react-icons/fa";
 import { MdSubscriptions } from "react-icons/md";
 
@@ -71,6 +72,11 @@ export default function AdminSideMenu() {
 		{ href: "/admin/overview", label: "Overview", icon: <FaTachometerAlt /> },
 		{ href: "/admin/new-video", label: "New Video", icon: <FaPlusCircle /> },
 		{ href: "/admin/long-video", label: "Long Video", icon: <FaFilm /> },
+		{
+			href: "/admin/shorts-from-long",
+			label: "Shorts From Long",
+			icon: <FaCut />,
+		},
 		{ href: "/admin/all-videos", label: "All Videos", icon: <FaVideo /> },
 		{
 			href: "/admin/subscriptions",
