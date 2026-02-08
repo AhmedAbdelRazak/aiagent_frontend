@@ -13,6 +13,9 @@ import {
 	DatePicker,
 	Switch,
 	Typography,
+	Progress,
+	Space,
+	Tag,
 	Spin,
 	Upload,
 } from "antd";
@@ -39,7 +42,6 @@ import {
 	RobotOutlined,
 } from "@ant-design/icons";
 import { useGoogleLogin } from "@react-oauth/google";
-import GenerationModal from "@/components/GenerationModal";
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -51,6 +53,78 @@ const Row = styled.div`
 `;
 
 const API_BASE = getApiBase();
+
+const PHASE_PROGRESS = {
+	INIT: 5,
+	FETCHING_TRENDS: 10,
+	TOPIC_READY: 15,
+	SEARCHING_IMAGES: 22,
+	IMAGE_POOL_READY: 30,
+	PLANNING_SCRIPT: 40,
+	GENERATING_CLIPS: 60,
+	ASSEMBLING_VIDEO: 75,
+	ADDING_VOICE_MUSIC: 85,
+	SYNCING_VOICE_MUSIC: 92,
+	VIDEO_UPLOADED: 96,
+	VIDEO_SCHEDULED: 97,
+	COMPLETED: 100,
+	ERROR: 100,
+};
+
+const PHASE_LABELS = {
+	INIT: "Starting up",
+	FETCHING_TRENDS: "Fetching trends",
+	TOPIC_READY: "Topic selected",
+	SEARCHING_IMAGES: "Searching images",
+	IMAGE_POOL_READY: "Image pool ready",
+	PLANNING_SCRIPT: "Planning script & visuals",
+	GENERATING_CLIPS: "Generating clips",
+	ASSEMBLING_VIDEO: "Assembling video",
+	ADDING_VOICE_MUSIC: "Adding voice & music",
+	SYNCING_VOICE_MUSIC: "Final sync",
+	VIDEO_UPLOADED: "Uploaded to YouTube",
+	VIDEO_SCHEDULED: "Scheduled",
+	COMPLETED: "Completed",
+	ERROR: "Failed",
+	FALLBACK: "Fallback",
+};
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const deriveProgress = (phase, extra = {}) => {
+	const base = PHASE_PROGRESS[phase] ?? 0;
+	if (phase === "GENERATING_CLIPS") {
+		const total = Number(extra?.total);
+		const done = Number(extra?.done);
+		if (Number.isFinite(total) && total > 0 && Number.isFinite(done)) {
+			const start = PHASE_PROGRESS.GENERATING_CLIPS ?? base;
+			const end = PHASE_PROGRESS.ASSEMBLING_VIDEO ?? Math.min(100, start + 20);
+			const ratio = clamp(done / total, 0, 1);
+			return Math.round(start + (end - start) * ratio);
+		}
+	}
+	return base;
+};
+
+const resolvePipelineLabel = (phase, extra = {}) => {
+	if (!phase) return "Idle";
+	if (phase === "ERROR") {
+		return extra?.msg ? `Failed: ${extra.msg}` : "Failed";
+	}
+	const base = PHASE_LABELS[phase] || phase;
+	if (phase === "TOPIC_READY" && extra?.topic) {
+		return `${base}: ${extra.topic}`;
+	}
+	if (
+		phase === "GENERATING_CLIPS" &&
+		Number.isFinite(Number(extra?.done)) &&
+		Number.isFinite(Number(extra?.total))
+	) {
+		return `${base} (${extra.done}/${extra.total})`;
+	}
+	if (extra?.msg) return `${base} - ${extra.msg}`;
+	return base;
+};
 
 /* helper: file → base64 */
 const fileToBase64 = (file) =>
@@ -76,10 +150,14 @@ export default function NewVideo() {
 	const [fileList, setFileList] = useState([]);
 	const [videoImage, setVideoImage] = useState(null); // { public_id, url } | null
 
-	/* SSE + modal */
-	const [modalOpen, setModalOpen] = useState(false);
+	/* SSE + progress */
 	const [phase, setPhase] = useState("INIT");
 	const [extra, setExtra] = useState({});
+	const [progressPct, setProgressPct] = useState(0);
+	const [pipelineLabel, setPipelineLabel] = useState("Idle");
+	const [phaseHistory, setPhaseHistory] = useState([]);
+	const [youtubeLink, setYoutubeLink] = useState("");
+	const [errorMsg, setErrorMsg] = useState("");
 	const sseReaderRef = useRef(null);
 
 	/* ───────────────────────────────
@@ -187,17 +265,36 @@ export default function NewVideo() {
 	const onFinish = async (values) => {
 		/* Already generating?  Just reopen modal. */
 		if (generating) {
-			setModalOpen(true);
+			message.info("A video is already generating.");
 			return;
 		}
 
-		setModalOpen(true);
 		setPhase("INIT");
 		setExtra({});
+		setProgressPct(0);
+		setPipelineLabel("Starting up");
+		setPhaseHistory([]);
+		setYoutubeLink("");
+		setErrorMsg("");
 		setLoading(true);
 		setGenerating(true);
 
 		cancelStream(); // safety
+
+		const handlePhaseUpdate = (p, e = {}) => {
+			const safeExtra = e?.phases ? { ...e, phases: undefined } : e;
+			setPhase(p);
+			setExtra(safeExtra || {});
+			setPhaseHistory((prev) => [
+				...prev,
+				{ phase: p, extra: safeExtra || {}, ts: Date.now() },
+			]);
+			setProgressPct((prev) => Math.max(prev, deriveProgress(p, safeExtra)));
+			setPipelineLabel(resolvePipelineLabel(p, safeExtra));
+			if (safeExtra?.youtubeLink) setYoutubeLink(safeExtra.youtubeLink);
+			if (p === "ERROR") setErrorMsg(safeExtra?.msg || "Generation failed.");
+			if (p === "COMPLETED" || p === "ERROR") setGenerating(false);
+		};
 
 		const processBuffer = () => {
 			const parts = buffer.split(/\r?\n\r?\n/);
@@ -208,9 +305,7 @@ export default function NewVideo() {
 						const { phase: p, extra: e } = JSON.parse(
 							chunk.replace(/^data:/, "")
 						);
-						setPhase(p);
-						setExtra(e || {});
-						if (p === "COMPLETED" || p === "ERROR") setGenerating(false);
+						handlePhaseUpdate(p, e || {});
 					} catch {
 						console.warn("Malformed SSE chunk:", chunk);
 					}
@@ -286,12 +381,7 @@ export default function NewVideo() {
 							const { phase: p, extra: e } = JSON.parse(
 								chunk.replace(/^data:/, "")
 							);
-							setPhase(p);
-							setExtra(e || {});
-							/* Terminate generating flag on completion / error */
-							if (p === "COMPLETED" || p === "ERROR") {
-								setGenerating(false);
-							}
+							handlePhaseUpdate(p, e || {});
 						} catch {
 							console.warn("Malformed SSE chunk:", chunk);
 						}
@@ -301,8 +391,9 @@ export default function NewVideo() {
 			processBuffer();
 			reader.releaseLock();
 		} catch (err) {
-			message.error(err.message || "Error starting generation");
-			setGenerating(false);
+			const msg = err.message || "Error starting generation";
+			message.error(msg);
+			handlePhaseUpdate("ERROR", { msg });
 		} finally {
 			setLoading(false);
 		}
@@ -330,6 +421,13 @@ export default function NewVideo() {
 	) : (
 		<VideoCameraAddOutlined />
 	);
+	const displayProgress = clamp(progressPct, 0, 100);
+	const statusTag = () => {
+		if (phase === "ERROR") return <Tag color='red'>failed</Tag>;
+		if (phase === "COMPLETED") return <Tag color='green'>completed</Tag>;
+		if (generating) return <Tag color='gold'>running</Tag>;
+		return <Tag>idle</Tag>;
+	};
 
 	return (
 		<>
@@ -362,9 +460,12 @@ export default function NewVideo() {
 					disabled={generating} /* lock inputs while generating */
 					initialValues={{
 						startDate: dayjs(),
+						category: "Entertainment",
 						language: "English",
-						country: "all countries",
-						useSora: false,
+						country: "US",
+						useSora: true,
+						ratio: "720:1280",
+						duration: "30",
 					}}
 				>
 					{/* Category */}
@@ -421,7 +522,6 @@ export default function NewVideo() {
 									Aspect Ratio
 								</span>
 							}
-							initialValue='1280:720'
 							rules={[{ required: true, message: "Select a ratio" }]}
 						>
 							<Select style={{ width: 200 }}>
@@ -444,7 +544,6 @@ export default function NewVideo() {
 									Duration (seconds)
 								</span>
 							}
-							initialValue='10'
 							rules={[{ required: true, message: "Select duration" }]}
 						>
 							<Select style={{ width: 140 }}>
@@ -464,7 +563,7 @@ export default function NewVideo() {
 								</span>
 							}
 							valuePropName='checked'
-							tooltip='Toggle Sora text-to-video generation (default: off)'
+							tooltip='Toggle Sora text-to-video generation (default: on)'
 						>
 							<Switch />
 						</Form.Item>
@@ -675,13 +774,75 @@ export default function NewVideo() {
 				</Form>
 			</Card>
 
-			{/* Progress Modal */}
-			<GenerationModal
-				open={modalOpen}
-				phase={phase}
-				extra={extra}
-				onClose={() => setModalOpen(false)}
-			/>
+			<Card style={{ marginTop: "1rem" }}>
+				<Space direction='vertical' style={{ width: "100%" }}>
+					<div>
+						<Text strong>Status:</Text> {statusTag()}
+					</div>
+					<div>
+						<Text strong>Progress:</Text>
+						<Progress
+							percent={displayProgress}
+							status={
+								phase === "ERROR"
+									? "exception"
+									: phase === "COMPLETED"
+										? "success"
+										: "active"
+							}
+						/>
+					</div>
+					<div>
+						<Text strong>Pipeline:</Text> {pipelineLabel}
+					</div>
+					{extra?.msg && (
+						<Text type='secondary' style={{ whiteSpace: "pre-wrap" }}>
+							Update: {extra.msg}
+						</Text>
+					)}
+					{extra?.sources && (
+						<Text type='secondary'>
+							Sources:{" "}
+							{Object.entries(extra.sources)
+								.map(([key, value]) => `${key}: ${value}`)
+								.join(", ")}
+						</Text>
+					)}
+					{Number.isFinite(Number(extra?.total)) &&
+						Number.isFinite(Number(extra?.done)) && (
+							<Text type='secondary'>
+								Clips: {extra.done}/{extra.total}
+							</Text>
+						)}
+					{phaseHistory.length > 0 && (
+						<div style={{ whiteSpace: "pre-wrap" }}>
+							{phaseHistory
+								.slice(-5)
+								.map((entry) => {
+									const time = new Date(entry.ts).toLocaleTimeString();
+									const note = entry.extra?.msg
+										? ` - ${entry.extra.msg}`
+										: "";
+									return `${time} - ${entry.phase}${note}`;
+								})
+								.join("\n")}
+						</div>
+					)}
+					{youtubeLink && (
+						<div>
+							<Text strong>YouTube:</Text>{" "}
+							<a href={youtubeLink} target='_blank' rel='noreferrer'>
+								{youtubeLink}
+							</a>
+						</div>
+					)}
+					{errorMsg && (
+						<Text type='danger' style={{ whiteSpace: "pre-wrap" }}>
+							Error: {errorMsg}
+						</Text>
+					)}
+				</Space>
+			</Card>
 		</>
 	);
 }
