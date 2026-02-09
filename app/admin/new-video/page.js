@@ -303,7 +303,7 @@ export default function NewVideo() {
 				if (chunk.startsWith("data:")) {
 					try {
 						const { phase: p, extra: e } = JSON.parse(
-							chunk.replace(/^data:/, "")
+							chunk.replace(/^data:/, ""),
 						);
 						handlePhaseUpdate(p, e || {});
 					} catch {
@@ -349,7 +349,7 @@ export default function NewVideo() {
 			if (!token) throw new Error("No auth token, please log in again.");
 			if (!API_BASE)
 				throw new Error(
-					"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
+					"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)",
 				);
 
 			const res = await fetch(`${API_BASE}/videos`, {
@@ -360,6 +360,17 @@ export default function NewVideo() {
 				},
 				body: JSON.stringify(payload),
 			});
+			if (!res.ok) {
+				const errText = await res.text().catch(() => "");
+				let msg = "Failed to start generation.";
+				try {
+					const parsed = JSON.parse(errText);
+					msg = parsed.error || parsed.message || msg;
+				} catch {
+					if (errText) msg = errText;
+				}
+				throw new Error(msg);
+			}
 			if (!res.body) throw new Error("Server does not support streaming.");
 
 			/* ‑‑‑ Stream Reader */
@@ -379,7 +390,7 @@ export default function NewVideo() {
 					if (chunk.startsWith("data:")) {
 						try {
 							const { phase: p, extra: e } = JSON.parse(
-								chunk.replace(/^data:/, "")
+								chunk.replace(/^data:/, ""),
 							);
 							handlePhaseUpdate(p, e || {});
 						} catch {
@@ -820,9 +831,7 @@ export default function NewVideo() {
 								.slice(-5)
 								.map((entry) => {
 									const time = new Date(entry.ts).toLocaleTimeString();
-									const note = entry.extra?.msg
-										? ` - ${entry.extra.msg}`
-										: "";
+									const note = entry.extra?.msg ? ` - ${entry.extra.msg}` : "";
 									return `${time} - ${entry.phase}${note}`;
 								})
 								.join("\n")}
