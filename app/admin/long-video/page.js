@@ -37,6 +37,7 @@ const { TextArea } = Input;
 const { Panel } = Collapse;
 
 const API_BASE = getApiBase();
+const LONG_VIDEO_ENDPOINT = "long-video";
 
 const DURATION_OPTIONS = [20, 45, 60, 90, 120, 180, 240, 300, 360];
 const JOB_ID_STORAGE_KEY = "longVideoJobId";
@@ -102,7 +103,7 @@ export default function AdminLongVideoPage() {
 		nextStatus,
 		nextProgress,
 		nextMeta,
-		nextFinalUrl
+		nextFinalUrl,
 	) => {
 		const statusLabel = String(nextStatus || "").toLowerCase();
 		if (nextFinalUrl || statusLabel === "completed") return "Completed";
@@ -119,7 +120,7 @@ export default function AdminLongVideoPage() {
 
 		if (nextMeta?.visualPlan) {
 			const presenterCount = Array.isArray(
-				nextMeta.visualPlan.presenterSegments
+				nextMeta.visualPlan.presenterSegments,
 			)
 				? nextMeta.visualPlan.presenterSegments.length
 				: 0;
@@ -153,7 +154,7 @@ export default function AdminLongVideoPage() {
 
 		if (!API_BASE) {
 			message.error(
-				"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
+				"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)",
 			);
 			return;
 		}
@@ -163,7 +164,7 @@ export default function AdminLongVideoPage() {
 				const token = localStorage.getItem("token");
 				if (!token) throw new Error("No auth token, please log in again.");
 
-				const res = await fetch(`${API_BASE}/long-video/${id}`, {
+				const res = await fetch(`${API_BASE}/${LONG_VIDEO_ENDPOINT}/${id}`, {
 					headers: {
 						Authorization: `Bearer ${token}`,
 						"Cache-Control": "no-cache",
@@ -186,13 +187,13 @@ export default function AdminLongVideoPage() {
 				const nextProgress = normalizeProgress(
 					data.status,
 					useFallback ? fallbackPct : parsedPct,
-					data.finalVideoUrl
+					data.finalVideoUrl,
 				);
 				const nextStep = resolveStepLabel(
 					data.status,
 					nextProgress,
 					data.meta,
-					data.finalVideoUrl
+					data.finalVideoUrl,
 				);
 				setStatus(data.status);
 				setProgress(nextProgress);
@@ -239,7 +240,7 @@ export default function AdminLongVideoPage() {
 			if (!token) throw new Error("No auth token, please log in again.");
 			if (!API_BASE)
 				throw new Error(
-					"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
+					"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)",
 				);
 
 			const payload = {
@@ -260,7 +261,7 @@ export default function AdminLongVideoPage() {
 				};
 			}
 
-			const res = await fetch(`${API_BASE}/long-video`, {
+			const res = await fetch(`${API_BASE}/${LONG_VIDEO_ENDPOINT}`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -280,7 +281,7 @@ export default function AdminLongVideoPage() {
 			localStorage.setItem(JOB_ID_STORAGE_KEY, data.jobId);
 			startPolling(data.jobId);
 
-			message.success("Long video job queued.");
+			message.success("Real-studio long video job queued.");
 		} catch (err) {
 			message.error(err.message || "Failed to start long video job.");
 		} finally {
@@ -301,6 +302,10 @@ export default function AdminLongVideoPage() {
 			<Title level={3} style={{ marginBottom: 12 }}>
 				Create Long Video
 			</Title>
+			<Text type='secondary' style={{ display: "block", marginBottom: 12 }}>
+				This page is currently pointed at the fixed real-presenter studio
+				pipeline.
+			</Text>
 
 			<Card style={{ marginBottom: "1rem" }}>
 				<Form

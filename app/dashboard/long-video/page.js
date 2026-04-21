@@ -32,6 +32,7 @@ import {
 const { Text } = Typography;
 const { TextArea } = Input;
 const API_BASE = getApiBase();
+const LONG_VIDEO_ENDPOINT = "long-video";
 
 const DURATION_OPTIONS = [20, 45, 60, 120, 180, 240, 300];
 
@@ -70,7 +71,7 @@ export default function LongVideoPage() {
 			try {
 				const token = localStorage.getItem("token");
 				if (!token) throw new Error("No auth token, please log in again.");
-				const res = await fetch(`${API_BASE}/long-video/${id}`, {
+				const res = await fetch(`${API_BASE}/${LONG_VIDEO_ENDPOINT}/${id}`, {
 					headers: {
 						Authorization: `Bearer ${token}`,
 						"Cache-Control": "no-cache",
@@ -132,7 +133,7 @@ export default function LongVideoPage() {
 				};
 			}
 
-			const res = await fetch(`${API_BASE}/long-video`, {
+			const res = await fetch(`${API_BASE}/${LONG_VIDEO_ENDPOINT}`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -149,7 +150,7 @@ export default function LongVideoPage() {
 			setJobId(data.jobId);
 			setStatus(data.status);
 			startPolling(data.jobId);
-			message.success("Long video job queued.");
+			message.success("Real-studio long video job queued.");
 		} catch (err) {
 			message.error(err.message || "Failed to start long video job.");
 		} finally {
@@ -161,6 +162,10 @@ export default function LongVideoPage() {
 		<>
 			<SeoHead title='Dashboard | Long Video' />
 			<h2>Create Long Video</h2>
+			<Text type='secondary'>
+				This route uses the fixed real presenter video and the locked studio
+				restyle pipeline.
+			</Text>
 
 			<Card style={{ marginBottom: "1rem" }}>
 				<Form
