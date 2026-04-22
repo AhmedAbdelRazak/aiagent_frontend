@@ -1,9 +1,14 @@
 // next.config.js
 const path = require("path");
+const isDev = process.env.NODE_ENV !== "production";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	reactStrictMode: true,
+	// Keep dev output separate from production build artifacts.
+	// This avoids .next corruption / missing-file races on Windows when
+	// a dev server and build output step on the same directory.
+	distDir: isDev ? ".next-dev" : ".next",
 	compiler: {
 		styledComponents: {
 			// enable server-side rendering of styles

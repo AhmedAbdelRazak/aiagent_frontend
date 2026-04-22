@@ -56,6 +56,7 @@ const PROGRESS_STAGES = [
 
 export default function AdminLongVideoPage() {
   const [form] = Form.useForm();
+  const [messageApi, messageContextHolder] = message.useMessage();
 
   const [loading, setLoading] = useState(false);
   const [polling, setPolling] = useState(false);
@@ -70,6 +71,13 @@ export default function AdminLongVideoPage() {
   const [schedEnabled, setSchedEnabled] = useState(false);
 
   const pollRef = useRef(null);
+  const restoredJobRef = useRef(false);
+
+  const clearSavedJobId = () => {
+    try {
+      localStorage.removeItem(JOB_ID_STORAGE_KEY);
+    } catch {}
+  };
 
   const stopPolling = () => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -141,6 +149,8 @@ export default function AdminLongVideoPage() {
   }, []);
 
   useEffect(() => {
+    if (restoredJobRef.current) return;
+    restoredJobRef.current = true;
     const storedJobId = localStorage.getItem(JOB_ID_STORAGE_KEY);
     if (storedJobId) {
       setJobId(storedJobId);
@@ -153,9 +163,10 @@ export default function AdminLongVideoPage() {
     stopPolling();
 
     if (!API_BASE) {
-      message.error(
-        "Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)",
-      );
+      const msg =
+        "Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)";
+      setError(msg);
+      messageApi.error(msg);
       return;
     }
 
@@ -203,11 +214,19 @@ export default function AdminLongVideoPage() {
         setMeta({ ...(data.meta || {}), currentStep: nextStep });
 
         if (data.status === "completed" || data.status === "failed") {
+          clearSavedJobId();
           stopPolling();
         }
       } catch (err) {
         stopPolling();
-        message.error(err.message || "Polling failed");
+        clearSavedJobId();
+        const msg =
+          err?.message === "Failed to fetch"
+            ? `Could not reach the backend API at ${API_BASE}.`
+            : err?.message || "Polling failed";
+        setError(msg);
+        setJobId(null);
+        messageApi.error(msg);
       }
     };
 
@@ -283,9 +302,14 @@ export default function AdminLongVideoPage() {
       localStorage.setItem(JOB_ID_STORAGE_KEY, data.jobId);
       startPolling(data.jobId);
 
-      message.success("Real-studio long video job queued.");
+      messageApi.success("Real-studio long video job queued.");
     } catch (err) {
-      message.error(err.message || "Failed to start long video job.");
+      const msg =
+        err?.message === "Failed to fetch"
+          ? `Could not reach the backend API at ${API_BASE}.`
+          : err?.message || "Failed to start long video job.";
+      setError(msg);
+      messageApi.error(msg);
     } finally {
       setLoading(false);
     }
@@ -299,6 +323,7 @@ export default function AdminLongVideoPage() {
 
   return (
     <>
+      {messageContextHolder}
       <SeoHead title="Admin | Long Video" />
 
       <Title level={3} style={{ marginBottom: 12 }}>
