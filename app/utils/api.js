@@ -4,7 +4,6 @@ import Cookies from "js-cookie";
 import { getApiBase } from "./apiBase";
 
 const axiosClient = axios.create({
-	baseURL: getApiBase(),
 	headers: {
 		"Content-Type": "application/json",
 	},
@@ -12,6 +11,10 @@ const axiosClient = axios.create({
 
 axiosClient.interceptors.request.use(
 	(config) => {
+		const apiBase = getApiBase();
+		if (apiBase) {
+			config.baseURL = apiBase;
+		}
 		const token = Cookies.get("token");
 		if (token) {
 			config.headers.Authorization = `Bearer ${token}`;

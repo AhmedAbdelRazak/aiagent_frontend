@@ -31,8 +31,9 @@ import {
 
 const { Text } = Typography;
 const { TextArea } = Input;
-const API_BASE = getApiBase();
 const LONG_VIDEO_ENDPOINT = "long-video";
+const MAX_TRANSIENT_POLL_ERRORS = 6;
+const JOB_ID_STORAGE_KEY = "longVideoJobId";
 
 const DURATION_OPTIONS = [20, 45, 60, 120, 180, 240, 300];
 
@@ -45,8 +46,17 @@ export default function LongVideoPage() {
 	const [topic, setTopic] = useState("");
 	const [finalUrl, setFinalUrl] = useState("");
 	const [error, setError] = useState("");
+	const [connectionNotice, setConnectionNotice] = useState("");
 	const [schedEnabled, setSchedEnabled] = useState(false);
 	const pollRef = useRef(null);
+	const pollErrorCountRef = useRef(0);
+	const restoredJobRef = useRef(false);
+
+	const clearSavedJobId = () => {
+		try {
+			localStorage.removeItem(JOB_ID_STORAGE_KEY);
+		} catch {}
+	};
 
 	const stopPolling = () => {
 		if (pollRef.current) clearInterval(pollRef.current);
@@ -58,20 +68,31 @@ export default function LongVideoPage() {
 		return () => stopPolling();
 	}, []);
 
+	useEffect(() => {
+		if (restoredJobRef.current) return;
+		restoredJobRef.current = true;
+		try {
+			const storedJobId = localStorage.getItem(JOB_ID_STORAGE_KEY);
+			if (storedJobId) {
+				setJobId(storedJobId);
+				startPolling(storedJobId);
+			}
+		} catch {}
+	}, []);
+
 	const startPolling = (id) => {
 		stopPolling();
-		if (!API_BASE) {
-			message.error(
-				"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
-			);
+		pollErrorCountRef.current = 0;
+		const apiBase = getApiBase();
+		if (!apiBase) {
+			message.error("Backend API base is not configured.");
 			return;
 		}
-		setPolling(true);
-		pollRef.current = setInterval(async () => {
+		const pollOnce = async () => {
 			try {
 				const token = localStorage.getItem("token");
 				if (!token) throw new Error("No auth token, please log in again.");
-				const res = await fetch(`${API_BASE}/${LONG_VIDEO_ENDPOINT}/${id}`, {
+				const res = await fetch(`${apiBase}/${LONG_VIDEO_ENDPOINT}/${id}`, {
 					headers: {
 						Authorization: `Bearer ${token}`,
 						"Cache-Control": "no-cache",
@@ -80,19 +101,39 @@ export default function LongVideoPage() {
 				});
 				if (!res.ok) throw new Error("Failed to fetch job status.");
 				const data = await res.json();
+				pollErrorCountRef.current = 0;
+				setConnectionNotice("");
 				setStatus(data.status);
 				setProgress(data.progressPct || 0);
 				setTopic(data.topic || "");
 				setFinalUrl(data.finalVideoUrl || "");
 				setError(data.error || "");
 				if (data.status === "completed" || data.status === "failed") {
+					clearSavedJobId();
 					stopPolling();
 				}
 			} catch (err) {
+				const isNetworkError =
+					err?.message === "Failed to fetch" ||
+					/network|fetch/i.test(String(err?.message || ""));
+				const msg = isNetworkError
+					? "Could not reach the backend API."
+					: err?.message || "Polling failed";
+				pollErrorCountRef.current += 1;
+				if (pollErrorCountRef.current < MAX_TRANSIENT_POLL_ERRORS) {
+					setError("");
+					setConnectionNotice("Reconnecting to backend...");
+					return;
+				}
 				stopPolling();
-				message.error(err.message || "Polling failed");
+				setConnectionNotice("");
+				setError(msg);
+				message.error(msg);
 			}
-		}, 20000);
+		};
+		setPolling(true);
+		pollRef.current = setInterval(pollOnce, 20000);
+		pollOnce();
 	};
 
 	const onFinish = async (values) => {
@@ -101,16 +142,15 @@ export default function LongVideoPage() {
 		setProgress(0);
 		setFinalUrl("");
 		setError("");
+		setConnectionNotice("");
 		setJobId(null);
 		setTopic("");
 
 		try {
 			const token = localStorage.getItem("token");
 			if (!token) throw new Error("No auth token, please log in again.");
-			if (!API_BASE)
-				throw new Error(
-					"Missing NEXT_PUBLIC_API_URL (example: http://127.0.0.1:8102/api)"
-				);
+			const apiBase = getApiBase();
+			if (!apiBase) throw new Error("Backend API base is not configured.");
 
 			const payload = {
 				preferredTopicHint: values.titlePrompt?.trim() || "",
@@ -133,7 +173,7 @@ export default function LongVideoPage() {
 				};
 			}
 
-			const res = await fetch(`${API_BASE}/${LONG_VIDEO_ENDPOINT}`, {
+			const res = await fetch(`${apiBase}/${LONG_VIDEO_ENDPOINT}`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -149,10 +189,18 @@ export default function LongVideoPage() {
 			const data = await res.json();
 			setJobId(data.jobId);
 			setStatus(data.status);
+			try {
+				localStorage.setItem(JOB_ID_STORAGE_KEY, data.jobId);
+			} catch {}
 			startPolling(data.jobId);
 			message.success("Real-studio long video job queued.");
 		} catch (err) {
-			message.error(err.message || "Failed to start long video job.");
+			const msg =
+				err?.message === "Failed to fetch"
+					? "Could not reach the backend API."
+					: err?.message || "Failed to start long video job.";
+			setError(msg);
+			message.error(msg);
 		} finally {
 			setLoading(false);
 		}
@@ -357,6 +405,12 @@ export default function LongVideoPage() {
 
 			<Card>
 				<Text strong>Status:</Text> {status || "idle"}
+				{jobId && (
+					<>
+						{" "}
+						<Text type='secondary'>jobId: {jobId}</Text>
+					</>
+				)}
 				<br />
 				<Text strong>Progress:</Text>
 				<Progress
@@ -379,7 +433,13 @@ export default function LongVideoPage() {
 					</>
 				)}
 				{error && <Text type='danger'>Error: {error}</Text>}
-				{polling && !finalUrl && !error && (
+				{connectionNotice && !error && (
+					<>
+						<br />
+						<Text type='secondary'>{connectionNotice}</Text>
+					</>
+				)}
+				{polling && !finalUrl && !error && !connectionNotice && (
 					<Text type='secondary'>Job is running... polling every 20s.</Text>
 				)}
 			</Card>
