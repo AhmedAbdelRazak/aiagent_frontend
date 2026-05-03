@@ -22,6 +22,7 @@ import {
 import dayjs from "dayjs";
 import SeoHead from "@/components/SeoHead";
 import { getApiBase } from "@/utils/apiBase";
+import { getToken } from "@/utils/auth";
 import {
   VideoCameraAddOutlined,
   ClockCircleOutlined,
@@ -175,7 +176,7 @@ export default function AdminLongVideoPage() {
 
     const pollOnce = async () => {
       try {
-        const token = localStorage.getItem("token");
+        const token = getToken();
         if (!token) throw new Error("No auth token, please log in again.");
 
         const res = await fetch(`${apiBase}/${LONG_VIDEO_ENDPOINT}/${id}`, {
@@ -274,7 +275,7 @@ export default function AdminLongVideoPage() {
     setMeta({});
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getToken();
       if (!token) throw new Error("No auth token, please log in again.");
       const apiBase = getApiBase();
       if (!apiBase) throw new Error("Backend API base is not configured.");

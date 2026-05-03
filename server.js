@@ -7,20 +7,21 @@ const { parse } = require("url");
 const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev, dir: __dirname });
 const handle = app.getRequestHandler();
-const PORT = 3103;
+const PORT = Number(process.env.PORT || 3103);
+const HOST = process.env.HOST || "127.0.0.1";
 
 app.prepare().then(() => {
 	const server = express();
 	server.use(compression());
 
 	// Let Next.js handle everything (pages, assets, API routes)
-	server.all("*", (req, res) => {
+	server.use((req, res) => {
 		const parsedUrl = parse(req.url, true);
 		return handle(req, res, parsedUrl);
 	});
 
-	server.listen(PORT, (err) => {
+	server.listen(PORT, HOST, (err) => {
 		if (err) throw err;
-		console.log(`> Next.js server running at http://localhost:${PORT}`);
+		console.log(`> Next.js server running at http://${HOST}:${PORT}`);
 	});
 });

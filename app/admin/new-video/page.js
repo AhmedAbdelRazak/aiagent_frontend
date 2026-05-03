@@ -23,6 +23,7 @@ import dayjs from "dayjs";
 import axios from "@/utils/api";
 import SeoHead from "@/components/SeoHead";
 import { getApiBase } from "@/utils/apiBase";
+import { getToken } from "@/utils/auth";
 import styled from "styled-components";
 import {
 	DisconnectOutlined,
@@ -328,9 +329,6 @@ export default function NewVideo() {
 				}),
 				...(videoImage && { videoImage }),
 				useSora: Boolean(values.useSora),
-				youtubeAccessToken: userProfile?.youtubeAccessToken || "",
-				youtubeRefreshToken: userProfile?.youtubeRefreshToken || "",
-				youtubeTokenExpiresAt: userProfile?.youtubeTokenExpiresAt || null,
 				youtubeEmail: userProfile?.youtubeEmail || "",
 			};
 
@@ -345,7 +343,7 @@ export default function NewVideo() {
 				};
 			}
 
-			const token = localStorage.getItem("token");
+			const token = getToken();
 			if (!token) throw new Error("No auth token, please log in again.");
 			if (!API_BASE)
 				throw new Error(
@@ -425,7 +423,7 @@ export default function NewVideo() {
 	}
 
 	const isAdmin = userProfile?.role === "admin";
-	const hasYouTube = Boolean(userProfile?.youtubeRefreshToken);
+	const hasYouTube = Boolean(userProfile?.youtubeConnected);
 	const buttonLabel = generating ? "Progressing…" : "Generate";
 	const buttonIcon = generating ? (
 		<LoadingOutlined />

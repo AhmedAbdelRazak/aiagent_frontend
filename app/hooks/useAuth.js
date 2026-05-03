@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "@/utils/api"; // your axios instance with baseURL
 import { useRouter } from "next/navigation";
+import { getToken, removeToken, setToken } from "@/utils/auth";
 
 const AuthContext = createContext();
 
@@ -22,7 +23,7 @@ export function AuthProvider({ children }) {
 
 	// ─── 1) On mount, try to load existing token & fetch profile ───
 	useEffect(() => {
-		const token = localStorage.getItem("token");
+		const token = getToken();
 		if (token) {
 			// 1a) Set Authorization header for all axios calls
 			axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -35,7 +36,7 @@ export function AuthProvider({ children }) {
 				})
 				.catch((err) => {
 					console.error("Profile fetch error:", err);
-					localStorage.removeItem("token");
+					removeToken();
 					setUser(null);
 				})
 				.finally(() => {
@@ -67,7 +68,7 @@ export function AuthProvider({ children }) {
 		} = res.data.data;
 
 		// 2a) Save token
-		localStorage.setItem("token", token);
+		setToken(token);
 
 		// 2b) Set auth header
 		axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -100,7 +101,7 @@ export function AuthProvider({ children }) {
 		} = res.data.data;
 
 		// 3a) Save token
-		localStorage.setItem("token", token);
+		setToken(token);
 
 		// 3b) Set auth header
 		axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -120,7 +121,7 @@ export function AuthProvider({ children }) {
 
 	// ─── 4) logout() clears everything and sends user to login ───
 	const logout = () => {
-		localStorage.removeItem("token");
+		removeToken();
 		delete axios.defaults.headers.common["Authorization"];
 		setUser(null);
 		router.push("/login");

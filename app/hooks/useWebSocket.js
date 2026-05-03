@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import io from "socket.io-client";
 import { getSocketBase } from "@/utils/apiBase";
+import { getToken } from "@/utils/auth";
 
 export default function useWebSocket() {
 	const [socket, setSocket] = useState(null);
@@ -13,8 +14,14 @@ export default function useWebSocket() {
 			console.warn("Missing NEXT_PUBLIC_API_URL; websocket disabled.");
 			return () => {};
 		}
+		const token = getToken();
+		if (!token) {
+			console.warn("Missing auth token; websocket disabled.");
+			return () => {};
+		}
 		const s = io(socketBase, {
 			transports: ["websocket"],
+			auth: { token },
 		});
 		setSocket(s);
 		return () => {

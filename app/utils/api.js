@@ -1,7 +1,7 @@
 // app/utils/api.js
 import axios from "axios";
-import Cookies from "js-cookie";
 import { getApiBase } from "./apiBase";
+import { getToken } from "./auth";
 
 const axiosClient = axios.create({
 	headers: {
@@ -15,7 +15,7 @@ axiosClient.interceptors.request.use(
 		if (apiBase) {
 			config.baseURL = apiBase;
 		}
-		const token = Cookies.get("token");
+		const token = getToken();
 		if (token) {
 			config.headers.Authorization = `Bearer ${token}`;
 		}
