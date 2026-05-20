@@ -12,6 +12,7 @@ const HOST = process.env.HOST || "127.0.0.1";
 
 app.prepare().then(() => {
 	const server = express();
+	server.disable("x-powered-by");
 	server.use(compression());
 
 	// Let Next.js handle everything (pages, assets, API routes)
