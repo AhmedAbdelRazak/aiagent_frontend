@@ -237,8 +237,8 @@ export default function LongVideoPage() {
 						tooltip='If empty, the orchestrator will pick a trending movie topic.'
 					>
 						<TextArea
-							rows={2}
-							placeholder='Example: The top reasons people are talking about Dune 2'
+							rows={8}
+							placeholder='Paste a structured brief with title, tone, audience, visuals, thumbnail text, and outro.'
 						/>
 					</Form.Item>
 

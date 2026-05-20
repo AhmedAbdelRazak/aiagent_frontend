@@ -379,8 +379,8 @@ export default function AdminLongVideoPage() {
             tooltip="If empty, the orchestrator will pick a trending topic."
           >
             <TextArea
-              rows={2}
-              placeholder="Example: Avatar: Fire and Ash - what's new, who's new, and why this sequel might be the turning point"
+              rows={8}
+              placeholder="Paste a structured brief with title, tone, audience, visuals, thumbnail text, and outro."
             />
           </Form.Item>
 
